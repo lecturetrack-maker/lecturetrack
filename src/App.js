@@ -57,14 +57,19 @@ const STATUS = {
 const BATCH_COLORS = ["#6366f1","#10b981","#f59e0b","#ef4444","#3b82f6","#8b5cf6","#ec4899","#14b8a6","#f97316","#06b6d4"];
 
 const MOTIVATIONAL_QUOTES = [
-  "Every hour you teach shapes a future doctor! 🏥",
-  "100 hours of dedication — you're a legend! 🌟",
-  "Your passion for physics inspires generations! ⚡",
-  "Great teachers create great doctors! 👨‍⚕️",
-  "100 hours down — countless dreams lit up! 🔥",
-  "You didn't just teach physics, you taught perseverance! 💪",
-  "NEET toppers remember teachers like you! 🏆",
+  "100 hours of dedication — you are a true legend! 🌟",
+  "Every hour you teach lights up a student's future! 💡",
+  "Great teachers don't just teach subjects — they build dreams! 🚀",
+  "100 hours down — countless lives changed forever! 🔥",
+  "Your dedication inspires more than you will ever know! 💪",
+  "The best investment in a student's future is a teacher like you! 🏆",
+  "NEET and JEE toppers always remember their favourite teacher! 👑",
+  "You didn't just teach — you transformed futures! 🌈",
+  "100 hours of passion, patience and purpose! Incredible! 🎯",
+  "Behind every successful student is a dedicated teacher like you! ❤️",
 ];
+
+const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","Multiple Subjects"];
 
 function buildCSV(chapters) {
   const rows = [["Batch","Chapter","Allotted Hours","Taken Hours","Extra Hours","Remaining Hours","Progress %"]];
@@ -174,11 +179,20 @@ function SyncBadge({ status }) {
 function CongratsScreen({ profile, totalHours, onClose }) {
   const quote = MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
   const sal = profile.gender === "male" ? "Sir" : "Ma'am";
+  const subjectEmoji = {
+    "Physics":"⚡", "Chemistry":"🧪", "Biology":"🧬",
+    "Mathematics":"📐", "Multiple Subjects":"📚"
+  }[profile.subject] || "📖";
   return (
-    <div style={{ position:"fixed",inset:0,background:"linear-gradient(135deg,#6366f1,#4338ca)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:30,textAlign:"center" }}>
+    <div style={{ position:"fixed",inset:0,background:"linear-gradient(135deg,#6366f1,#4338ca)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:30,textAlign:"center",overflowY:"auto" }}>
       <div style={{ fontSize:80,marginBottom:10 }}>🎉</div>
       <div style={{ fontSize:28,fontWeight:900,color:"#fff",marginBottom:8 }}>Congratulations!</div>
-      <div style={{ fontSize:18,fontWeight:700,color:"rgba(255,255,255,.9)",marginBottom:6 }}>{profile.code} {sal}</div>
+      <div style={{ fontSize:18,fontWeight:700,color:"rgba(255,255,255,.9)",marginBottom:4 }}>{profile.code} {sal}</div>
+      {profile.subject && (
+        <div style={{ fontSize:14,color:"rgba(255,255,255,.7)",marginBottom:6 }}>
+          {subjectEmoji} {profile.subject} Teacher
+        </div>
+      )}
       <div style={{ fontSize:15,color:"rgba(255,255,255,.7)",marginBottom:24 }}>
         You've completed <strong style={{ color:"#fde68a" }}>{fmtHours(totalHours)}</strong> of lectures! 🏆
       </div>
@@ -206,6 +220,7 @@ function Onboarding({ onDone }) {
   const [pin,setPin] = useState("");
   const [confirmPin,setConfirmPin] = useState("");
   const [gender,setGender] = useState("male");
+  const [subject,setSubject] = useState("Physics");
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState("");
 
@@ -220,7 +235,7 @@ function Onboarding({ onDone }) {
       const { data, error:err } = await supabase.from("teachers").select("*").eq("code",code.trim().toUpperCase()).single();
       if (err||!data) { setError("❌ Code not found. Register first."); setLoading(false); return; }
       if (data.pin !== pin.trim()) { setError("❌ Wrong PIN. Try again."); setLoading(false); return; }
-      const profile = { code:data.code, name:data.name, gender:data.gender, pin:data.pin };
+      const profile = { code:data.code, name:data.name, gender:data.gender, pin:data.pin, subject:data.subject||"" };
       localStorage.setItem("lt_session", JSON.stringify(profile));
       onDone(profile);
     } catch { setError("❌ Connection failed. Check internet."); }
@@ -235,7 +250,7 @@ function Onboarding({ onDone }) {
     try {
       const { data:existing } = await supabase.from("teachers").select("code").eq("code",code.trim().toUpperCase()).single();
       if (existing) { setError("❌ Code taken. Choose another."); setLoading(false); return; }
-      const profile = { code:code.trim().toUpperCase(), name:name.trim(), gender, pin:pin.trim() };
+      const profile = { code:code.trim().toUpperCase(), name:name.trim(), gender, pin:pin.trim(), subject };
       const { error:err } = await supabase.from("teachers").insert(profile);
       if (err) { setError("❌ Registration failed: "+err.message); setLoading(false); return; }
       localStorage.setItem("lt_session", JSON.stringify(profile));
@@ -244,13 +259,21 @@ function Onboarding({ onDone }) {
     setLoading(false);
   };
 
+  const SUBJECT_OPTIONS = [
+    { label:"⚡ Physics",    value:"Physics" },
+    { label:"🧪 Chemistry",  value:"Chemistry" },
+    { label:"🧬 Biology",    value:"Biology" },
+    { label:"📐 Mathematics",value:"Mathematics" },
+    { label:"📚 Multiple",   value:"Multiple Subjects" },
+  ];
+
   return (
     <div style={{ minHeight:"100vh",background:"linear-gradient(135deg,#6366f1,#4338ca)",display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}>
       <div style={{ background:"#fff",borderRadius:24,padding:32,width:"100%",maxWidth:400,boxShadow:"0 24px 60px rgba(0,0,0,.2)" }}>
         <div style={{ textAlign:"center",marginBottom:24 }}>
           <div style={{ fontSize:48 }}>👨‍🏫</div>
           <h2 style={{ margin:"10px 0 4px",fontSize:24,fontWeight:900,color:"#0f172a" }}>LectureTrack</h2>
-          <p style={{ margin:0,color:"#94a3b8",fontSize:13 }}>Physics · NEET / JEE</p>
+          <p style={{ margin:0,color:"#94a3b8",fontSize:13 }}>NEET / JEE Coaching</p>
           <div style={{ marginTop:8,background:"#dcfce7",borderRadius:99,padding:"4px 14px",display:"inline-block",fontSize:12,color:"#16a34a",fontWeight:700 }}>
             🔒 PIN Protected · ☁️ Cloud Saved
           </div>
@@ -275,6 +298,17 @@ function Onboarding({ onDone }) {
                 ))}
               </div>
             </div>
+            <div style={{ marginBottom:14 }}>
+              <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>Subject You Teach</label>
+              <div style={{ display:"flex",flexWrap:"wrap",gap:8 }}>
+                {SUBJECT_OPTIONS.map(s=>(
+                  <button key={s.value} onClick={()=>setSubject(s.value)}
+                    style={{ padding:"8px 14px",borderRadius:12,border:`2px solid ${subject===s.value?"#6366f1":"#e2e8f0"}`,background:subject===s.value?"#eef2ff":"#f8fafc",fontWeight:700,cursor:"pointer",color:subject===s.value?"#6366f1":"#64748b",fontFamily:"inherit",fontSize:12 }}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </>
         )}
         <TInput label="Unique Code" value={code} onChange={e=>setCode(e.target.value.toUpperCase())} placeholder="e.g. PMK" />
@@ -282,7 +316,7 @@ function Onboarding({ onDone }) {
         {mode==="register"&&<TInput label="Confirm PIN" type="password" value={confirmPin} onChange={e=>setConfirmPin(e.target.value)} placeholder="Re-enter PIN" />}
         {mode==="register"&&name&&code&&(
           <div style={{ background:"#eef2ff",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#4f46e5",fontWeight:700 }}>
-            {gw}, {code} {sal}!
+            {gw}, {code} {sal}! 👋
           </div>
         )}
         {error&&<div style={{ background:"#fee2e2",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#dc2626",fontWeight:600 }}>{error}</div>}
@@ -729,7 +763,12 @@ function DashBar({ chapters, profile }) {
     <div style={{ background:"linear-gradient(135deg,#6366f1,#4338ca)",borderRadius:20,padding:"20px 20px 22px",color:"#fff",marginBottom:22 }}>
       <div style={{ fontSize:13,opacity:.8 }}>{gw},</div>
       <div style={{ fontSize:22,fontWeight:900,marginBottom:2 }}>{profile.code} {sal} 👋</div>
-      <div style={{ fontSize:12,opacity:.6,marginBottom:14 }}>{profile.name}</div>
+      <div style={{ fontSize:12,opacity:.6,marginBottom:6 }}>{profile.name}</div>
+      {profile.subject && (
+        <div style={{ display:"inline-block",background:"rgba(255,255,255,.2)",borderRadius:99,padding:"3px 12px",fontSize:12,fontWeight:700,marginBottom:10 }}>
+          {{"Physics":"⚡","Chemistry":"🧪","Biology":"🧬","Mathematics":"📐","Multiple Subjects":"📚"}[profile.subject]||"📖"} {profile.subject}
+        </div>
+      )}
       {batches.length>0&&(
         <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:14 }}>
           {batches.map(b=><span key={b} style={{ background:"rgba(255,255,255,.2)",borderRadius:99,padding:"3px 12px",fontSize:12,fontWeight:700 }}>{b}</span>)}
