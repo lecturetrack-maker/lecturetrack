@@ -4,39 +4,67 @@ import { useState, useEffect, useRef, useCallback } from "react";
 const SUPABASE_URL = "https://ddfmkfkvvadzlihiulnj.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkZm1rZmt2dmFkemxpaGl1bG5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0MzUwOTEsImV4cCI6MjA4ODAxMTA5MX0.2SsoVouiV4_U57-yEMU3e0OBQLWcbcLTYh1_3878KiM";
 
+// ── Supabase DB ───────────────────────────────────────────────────
 const db = {
-  async load(teacherCode) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/chapters?teacher_code=eq.${encodeURIComponent(teacherCode)}&order=created_at`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
-    });
-    if (!res.ok) return null;
+  async loadProfile(code) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/teachers?code=eq.${encodeURIComponent(code)}&limit=1`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
     const rows = await res.json();
-    return rows.map(r => ({
-      id: r.id, batchCode: r.batch_code, name: r.name,
-      totalHours: r.total_hours, completedHours: r.completed_hours,
-      extraHours: r.extra_hours, topics: r.topics || [],
-      notes: r.notes || "", lastCompletedTopic: r.last_completed_topic
-    }));
+    return rows?.[0] || null;
   },
-  async upsert(teacherCode, chapter) {
-    const body = {
-      id: chapter.id, teacher_code: teacherCode,
-      batch_code: chapter.batchCode, name: chapter.name,
-      total_hours: chapter.totalHours, completed_hours: chapter.completedHours,
-      extra_hours: chapter.extraHours || 0, topics: chapter.topics || [],
-      notes: chapter.notes || "", last_completed_topic: chapter.lastCompletedTopic || null,
-      updated_at: new Date().toISOString()
-    };
-    await fetch(`${SUPABASE_URL}/rest/v1/chapters`, {
+
+  async saveProfile(profile) {
+    await fetch(`${SUPABASE_URL}/rest/v1/teachers`, {
       method: "POST",
       headers: {
         apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
         "Content-Type": "application/json", Prefer: "resolution=merge-duplicates"
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify({
+        code: profile.code, name: profile.name,
+        gender: profile.gender, pin: profile.pin,
+        updated_at: new Date().toISOString()
+      })
     });
   },
-  async remove(id) {
+
+  async loadChapters(teacherCode) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/chapters?teacher_code=eq.${encodeURIComponent(teacherCode)}&order=created_at`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (!res.ok) return [];
+    const rows = await res.json();
+    return rows.map(r => ({
+      id: r.id, batchCode: r.batch_code, name: r.name,
+      totalHours: r.total_hours, completedHours: r.completed_hours,
+      extraHours: r.extra_hours || 0, topics: r.topics || [],
+      notes: r.notes || "", lastCompletedTopic: r.last_completed_topic
+    }));
+  },
+
+  async upsertChapter(teacherCode, chapter) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/chapters`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json", Prefer: "resolution=merge-duplicates"
+      },
+      body: JSON.stringify({
+        id: chapter.id, teacher_code: teacherCode,
+        batch_code: chapter.batchCode, name: chapter.name,
+        total_hours: chapter.totalHours, completed_hours: chapter.completedHours,
+        extra_hours: chapter.extraHours || 0, topics: chapter.topics || [],
+        notes: chapter.notes || "", last_completed_topic: chapter.lastCompletedTopic || null,
+        updated_at: new Date().toISOString()
+      })
+    });
+    return res.ok;
+  },
+
+  async deleteChapter(id) {
     await fetch(`${SUPABASE_URL}/rest/v1/chapters?id=eq.${id}`, {
       method: "DELETE",
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
@@ -74,7 +102,7 @@ function buildCSV(chapters) {
   return rows.map(r => r.map(v => `"${v}"`).join(",")).join("\n");
 }
 
-// ── UI Components ─────────────────────────────────────────────────
+// ── UI Primitives ─────────────────────────────────────────────────
 function PBar({ pct }) {
   return (
     <div style={{ background: "rgba(255,255,255,.25)", borderRadius: 99, height: 7, overflow: "hidden" }}>
@@ -86,11 +114,12 @@ function PBar({ pct }) {
 function Modal({ title, onClose, children }) {
   useEffect(() => {
     const h = e => e.key === "Escape" && onClose?.();
-    window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
   }, [onClose]);
   return (
-    <div onClick={onClose} style={{ position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(4px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:"#fff",borderRadius:20,padding:26,width:"100%",maxWidth:460,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.22)" }}>
+    <div onClick={onClose} style={{ position:"fixed",inset:0,background:"rgba(15,23,42,.6)",backdropFilter:"blur(6px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:"#fff",borderRadius:20,padding:26,width:"100%",maxWidth:440,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.25)" }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
           <h3 style={{ margin:0,fontSize:17,fontWeight:800,color:"#0f172a" }}>{title}</h3>
           {onClose && <button onClick={onClose} style={{ background:"#f1f5f9",border:"none",borderRadius:99,width:32,height:32,cursor:"pointer",fontSize:18,color:"#64748b" }}>×</button>}
@@ -106,8 +135,9 @@ function TInput({ label, value, onChange, placeholder, type="text", min, step })
     <div style={{ marginBottom:14 }}>
       {label && <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:5 }}>{label}</label>}
       <input type={type} value={value} onChange={onChange} placeholder={placeholder} min={min} step={step}
-        style={{ width:"100%",padding:"10px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box" }}
-        onFocus={e=>e.target.style.borderColor="#6366f1"} onBlur={e=>e.target.style.borderColor="#e2e8f0"} />
+        style={{ width:"100%",padding:"11px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box" }}
+        onFocus={e=>e.target.style.borderColor="#6366f1"}
+        onBlur={e=>e.target.style.borderColor="#e2e8f0"} />
     </div>
   );
 }
@@ -125,66 +155,122 @@ function SyncBadge({ status }) {
   const cfg = {
     saving: { bg:"#eef2ff", color:"#6366f1", text:"⏳ Saving..." },
     saved:  { bg:"#dcfce7", color:"#16a34a", text:"☁️ Saved to Cloud" },
-    error:  { bg:"#fee2e2", color:"#dc2626", text:"❌ Save failed" },
-    offline:{ bg:"#fef9c3", color:"#92400e", text:"📶 Offline — saved locally" },
-  }[status] || null;
+    error:  { bg:"#fee2e2", color:"#dc2626", text:"❌ Save failed — check connection" },
+  }[status];
   if (!cfg) return null;
   return (
-    <div style={{ background:cfg.bg,color:cfg.color,fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:99,display:"inline-block",marginBottom:10 }}>
+    <div style={{ background:cfg.bg,color:cfg.color,fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:99,display:"inline-flex",alignItems:"center",gap:4 }}>
       {cfg.text}
     </div>
   );
 }
 
-// ── Onboarding ────────────────────────────────────────────────────
+// ── Onboarding (Register/Login) ───────────────────────────────────
 function Onboarding({ onDone }) {
-  const [name,setName]=useState("");
-  const [code,setCode]=useState("");
-  const [gender,setGender]=useState("male");
-  const [loading,setLoading]=useState(false);
-  const sal = gender==="male"?"Sir":"Ma'am";
+  const [mode, setMode] = useState("login"); // login | register
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [pin, setPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [gender, setGender] = useState("male");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
   const h = new Date().getHours();
   const gw = h<12?"Good Morning ☀️":h<17?"Good Afternoon 🌤️":"Good Evening 🌙";
+  const sal = gender==="male"?"Sir":"Ma'am";
 
-  const handleStart = async () => {
-    if (!name.trim() || !code.trim()) return;
-    setLoading(true);
-    onDone({ name: name.trim(), code: code.trim().toUpperCase(), gender });
+  const handleLogin = async () => {
+    if (!code.trim() || !pin.trim()) { setError("Please enter your code and PIN"); return; }
+    setLoading(true); setError("");
+    try {
+      const profile = await db.loadProfile(code.trim().toUpperCase());
+      if (!profile) { setError("❌ Code not found. Please register first."); setLoading(false); return; }
+      if (profile.pin !== pin.trim()) { setError("❌ Wrong PIN. Please try again."); setLoading(false); return; }
+      localStorage.setItem("lt_session", JSON.stringify({ code: profile.code, name: profile.name, gender: profile.gender, pin: profile.pin }));
+      onDone({ code: profile.code, name: profile.name, gender: profile.gender, pin: profile.pin });
+    } catch { setError("❌ Connection failed. Check your internet."); }
+    setLoading(false);
+  };
+
+  const handleRegister = async () => {
+    if (!name.trim() || !code.trim() || !pin.trim()) { setError("Please fill all fields"); return; }
+    if (pin.length < 4) { setError("PIN must be at least 4 digits"); return; }
+    if (pin !== confirmPin) { setError("PINs do not match"); return; }
+    setLoading(true); setError("");
+    try {
+      const existing = await db.loadProfile(code.trim().toUpperCase());
+      if (existing) { setError("❌ This code is already taken. Choose another."); setLoading(false); return; }
+      const profile = { code: code.trim().toUpperCase(), name: name.trim(), gender, pin: pin.trim() };
+      await db.saveProfile(profile);
+      localStorage.setItem("lt_session", JSON.stringify(profile));
+      onDone(profile);
+    } catch { setError("❌ Registration failed. Check your internet."); }
+    setLoading(false);
   };
 
   return (
     <div style={{ minHeight:"100vh",background:"linear-gradient(135deg,#6366f1,#4338ca)",display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}>
       <div style={{ background:"#fff",borderRadius:24,padding:32,width:"100%",maxWidth:400,boxShadow:"0 24px 60px rgba(0,0,0,.2)" }}>
-        <div style={{ textAlign:"center",marginBottom:28 }}>
+        <div style={{ textAlign:"center",marginBottom:24 }}>
           <div style={{ fontSize:48 }}>👨‍🏫</div>
           <h2 style={{ margin:"10px 0 4px",fontSize:24,fontWeight:900,color:"#0f172a" }}>LectureTrack</h2>
           <p style={{ margin:0,color:"#94a3b8",fontSize:13 }}>Physics · NEET / JEE</p>
           <div style={{ marginTop:8,background:"#dcfce7",borderRadius:99,padding:"4px 14px",display:"inline-block",fontSize:12,color:"#16a34a",fontWeight:700 }}>
-            ☁️ Cloud Powered — Data Never Lost
+            🔒 PIN Protected · ☁️ Cloud Saved
           </div>
         </div>
-        <TInput label="Your Full Name" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. P M Krishna" />
-        <TInput label="Short Code (used to identify your data)" value={code} onChange={e=>setCode(e.target.value.toUpperCase())} placeholder="e.g. PMK" />
-        <div style={{ marginBottom:16 }}>
-          <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>Gender</label>
-          <div style={{ display:"flex",gap:10 }}>
-            {["male","female"].map(g=>(
-              <button key={g} onClick={()=>setGender(g)} style={{ flex:1,padding:10,borderRadius:12,border:`2px solid ${gender===g?"#6366f1":"#e2e8f0"}`,background:gender===g?"#eef2ff":"#f8fafc",fontWeight:700,cursor:"pointer",color:gender===g?"#6366f1":"#64748b",fontFamily:"inherit",fontSize:13 }}>
-                {g==="male"?"👨 Male":"👩 Female"}
-              </button>
-            ))}
-          </div>
+
+        {/* Toggle */}
+        <div style={{ display:"flex",background:"#f1f5f9",borderRadius:12,padding:4,marginBottom:20,gap:4 }}>
+          {["login","register"].map(m=>(
+            <button key={m} onClick={()=>{setMode(m);setError("");}} style={{ flex:1,padding:"9px",borderRadius:10,border:"none",cursor:"pointer",background:mode===m?"#fff":"transparent",fontWeight:700,fontSize:14,color:mode===m?"#6366f1":"#64748b",fontFamily:"inherit",boxShadow:mode===m?"0 2px 8px rgba(0,0,0,.08)":"none",transition:"all .2s" }}>
+              {m==="login"?"🔑 Login":"📝 Register"}
+            </button>
+          ))}
         </div>
-        {name&&code&&(
-          <div style={{ background:"#eef2ff",borderRadius:12,padding:"11px 14px",marginBottom:16,fontSize:14,color:"#4f46e5",fontWeight:700 }}>
+
+        {mode==="register" && (
+          <>
+            <TInput label="Your Full Name" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. P M Krishna" />
+            <div style={{ marginBottom:14 }}>
+              <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>Gender</label>
+              <div style={{ display:"flex",gap:10 }}>
+                {["male","female"].map(g=>(
+                  <button key={g} onClick={()=>setGender(g)} style={{ flex:1,padding:10,borderRadius:12,border:`2px solid ${gender===g?"#6366f1":"#e2e8f0"}`,background:gender===g?"#eef2ff":"#f8fafc",fontWeight:700,cursor:"pointer",color:gender===g?"#6366f1":"#64748b",fontFamily:"inherit",fontSize:13 }}>
+                    {g==="male"?"👨 Male":"👩 Female"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        <TInput label="Your Unique Code" value={code} onChange={e=>setCode(e.target.value.toUpperCase())} placeholder="e.g. PMK" />
+        <TInput label="PIN (4-6 digits)" type="password" value={pin} onChange={e=>setPin(e.target.value)} placeholder="Enter your PIN" />
+        {mode==="register" && (
+          <TInput label="Confirm PIN" type="password" value={confirmPin} onChange={e=>setConfirmPin(e.target.value)} placeholder="Re-enter your PIN" />
+        )}
+
+        {mode==="register" && name && code && (
+          <div style={{ background:"#eef2ff",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#4f46e5",fontWeight:700 }}>
             {gw}, {code} {sal}!
           </div>
         )}
-        <div style={{ background:"#f8fafc",borderRadius:12,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#64748b",lineHeight:1.7 }}>
-          💡 Your data is saved to the cloud using your Short Code. Use the same code on any device to access your data.
+
+        {error && (
+          <div style={{ background:"#fee2e2",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#dc2626",fontWeight:600 }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{ background:"#fffbeb",borderRadius:12,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#92400e",lineHeight:1.7 }}>
+          🔒 <strong>Your data is PIN protected.</strong> Only you can access it with your code + PIN combination.
         </div>
-        <button onClick={handleStart} disabled={loading} style={{ width:"100%",padding:13,background:"#6366f1",color:"#fff",border:"none",borderRadius:12,fontSize:16,fontWeight:800,cursor:"pointer",fontFamily:"inherit",opacity:loading?.7:1 }}>
-          {loading ? "Loading your data..." : "Get Started →"}
+
+        <button onClick={mode==="login"?handleLogin:handleRegister} disabled={loading}
+          style={{ width:"100%",padding:13,background:"#6366f1",color:"#fff",border:"none",borderRadius:12,fontSize:16,fontWeight:800,cursor:"pointer",fontFamily:"inherit",opacity:loading?.7:1 }}>
+          {loading ? "Please wait..." : mode==="login" ? "Login →" : "Create Account →"}
         </button>
       </div>
     </div>
@@ -203,7 +289,8 @@ function ChapterFormModal({ chapter, onSave, onClose }) {
       <TInput label="Total Allotted Hours" type="number" value={hours} onChange={e=>setHours(e.target.value)} placeholder="e.g. 12" min={0} />
       <div style={{ display:"flex",gap:10,justifyContent:"flex-end",marginTop:6 }}>
         <button onClick={onClose} style={{ background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>Cancel</button>
-        <button onClick={()=>{if(name.trim()&&batch.trim()&&hours)onSave({name:name.trim(),batchCode:batch.trim().toUpperCase(),totalHours:parseFloat(hours)})}} style={{ background:"#6366f1",color:"#fff",border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>Save</button>
+        <button onClick={()=>{if(name.trim()&&batch.trim()&&hours)onSave({name:name.trim(),batchCode:batch.trim().toUpperCase(),totalHours:parseFloat(hours)})}}
+          style={{ background:"#6366f1",color:"#fff",border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>Save</button>
       </div>
     </Modal>
   );
@@ -216,10 +303,10 @@ function ExportModal({ chapters, onClose }) {
   return (
     <Modal title="📊 Export Data" onClose={onClose}>
       <div style={{ overflowX:"auto",borderRadius:12,border:"1.5px solid #e2e8f0",marginBottom:16 }}>
-        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11,fontFamily:"inherit",minWidth:400 }}>
+        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11,fontFamily:"inherit",minWidth:380 }}>
           <thead>
             <tr style={{ background:"#6366f1",color:"#fff" }}>
-              {["Batch","Chapter","Allotted","Taken","Extra","Remaining","Progress%"].map(h=>(
+              {["Batch","Chapter","Allotted","Taken","Extra","Remaining","Progress"].map(h=>(
                 <th key={h} style={{ padding:"8px",textAlign:"left",fontWeight:700,whiteSpace:"nowrap" }}>{h}</th>
               ))}
             </tr>
@@ -244,15 +331,14 @@ function ExportModal({ chapters, onClose }) {
         </table>
       </div>
       <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-        <button onClick={()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=`LectureTrack_${new Date().toLocaleDateString("en-IN").replace(/\//g,"-")}.csv`;a.click();}} style={{ padding:12,background:"#6366f1",color:"#fff",border:"none",borderRadius:12,fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>
-          ⬇️ Download CSV for Google Drive
+        <button onClick={()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=`LectureTrack_${new Date().toLocaleDateString("en-IN").replace(/\//g,"-")}.csv`;a.click();}}
+          style={{ padding:12,background:"#6366f1",color:"#fff",border:"none",borderRadius:12,fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>
+          ⬇️ Download CSV
         </button>
-        <button onClick={()=>{navigator.clipboard.writeText(csv);setCopied(true);setTimeout(()=>setCopied(false),2000);}} style={{ padding:12,background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>
+        <button onClick={()=>{navigator.clipboard.writeText(csv);setCopied(true);setTimeout(()=>setCopied(false),2000);}}
+          style={{ padding:12,background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>
           {copied?"✅ Copied!":"📋 Copy to Clipboard"}
         </button>
-      </div>
-      <div style={{ marginTop:14,background:"#f0fdf4",borderRadius:12,padding:"12px 14px",fontSize:13,color:"#166534",lineHeight:1.8 }}>
-        <strong>Note:</strong> Your data is already safely stored in the cloud! This export is for sharing with your institution or keeping a local backup.
       </div>
     </Modal>
   );
@@ -312,14 +398,16 @@ function DetailPage({ chapter, color, onUpdate, onBack, syncStatus }) {
   const markLast=id=>onUpdate({...chapter,lastCompletedTopic:chapter.lastCompletedTopic===id?null:id});
   const deleteTopic=id=>onUpdate({...chapter,topics:(chapter.topics||[]).filter(t=>t.id!==id)});
   const addTopic=()=>{ if(!newTopic.trim())return; onUpdate({...chapter,topics:[...(chapter.topics||[]),{id:uid(),name:newTopic.trim(),done:false}]}); setNewTopic(""); };
-  const handleNotes=v=>{ setNotes(v); clearTimeout(ntRef.current); ntRef.current=setTimeout(()=>onUpdate({...chapter,notes:v}),700); };
+  const handleNotes=v=>{ setNotes(v); clearTimeout(ntRef.current); ntRef.current=setTimeout(()=>onUpdate({...chapter,notes:v}),800); };
 
   return (
-    <div style={{ minHeight:"100vh",background:"#f8fafc",fontFamily:"'Sora',sans-serif" }}>
+    <div style={{ minHeight:"100vh",background:"#f8fafc" }}>
       <div style={{ background:`linear-gradient(135deg,${color},${color}bb)`,padding:"24px 20px 28px",color:"#fff",position:"relative",overflow:"hidden" }}>
         <div style={{ position:"absolute",right:-30,top:-30,width:140,height:140,background:"rgba(255,255,255,.07)",borderRadius:"50%" }} />
-        <button onClick={onBack} style={{ background:"rgba(255,255,255,.2)",border:"none",borderRadius:10,padding:"7px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,marginBottom:12 }}>← Back</button>
-        <div style={{ marginBottom:8 }}><SyncBadge status={syncStatus} /></div>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
+          <button onClick={onBack} style={{ background:"rgba(255,255,255,.2)",border:"none",borderRadius:10,padding:"7px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13 }}>← Back</button>
+          <SyncBadge status={syncStatus} />
+        </div>
         <div style={{ fontSize:40,fontWeight:900,letterSpacing:"-1px",lineHeight:1 }}>{chapter.batchCode}</div>
         <div style={{ fontSize:20,fontWeight:700,marginTop:4,marginBottom:16 }}>{chapter.name}</div>
         <div style={{ display:"flex",gap:10 }}>
@@ -333,12 +421,13 @@ function DetailPage({ chapter, color, onUpdate, onBack, syncStatus }) {
         <div style={{ marginTop:14 }}>
           <PBar pct={pct} />
           <div style={{ display:"flex",justifyContent:"space-between",marginTop:5,fontSize:13,fontWeight:700,opacity:.9 }}>
-            <span>{pct.toFixed(0)}% complete</span><span>{STATUS[status].label}</span>
+            <span>{pct.toFixed(0)}% complete</span>
+            <span>{STATUS[status].label}</span>
           </div>
         </div>
         {status==="exceeded"&&(
           <div style={{ marginTop:10,background:"rgba(239,68,68,.3)",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700 }}>
-            ⚠️ Exceeded allotted by {(chapter.completedHours-chapter.totalHours).toFixed(1)}h
+            ⚠️ Exceeded by {(chapter.completedHours-chapter.totalHours).toFixed(1)}h
           </div>
         )}
       </div>
@@ -352,8 +441,8 @@ function DetailPage({ chapter, color, onUpdate, onBack, syncStatus }) {
           </div>
           <div style={{ background:"#fffbeb",border:"1.5px solid #fde68a",borderRadius:12,padding:"14px 16px" }}>
             <div style={{ fontSize:13,fontWeight:700,color:"#92400e",marginBottom:8 }}>➕ Extra Hours (Beyond Allotted)</div>
-            <div style={{ display:"flex",gap:8,marginBottom:8 }}>
-              <input type="number" min={0} step={0.5} value={extraH} onChange={e=>setExtraH(e.target.value)} onKeyDown={e=>e.key==="Enter"&&logExtra()} placeholder="Extra hours beyond plan..."
+            <div style={{ display:"flex",gap:8,marginBottom:6 }}>
+              <input type="number" min={0} step={0.5} value={extraH} onChange={e=>setExtraH(e.target.value)} onKeyDown={e=>e.key==="Enter"&&logExtra()} placeholder="Extra hours..."
                 style={{ flex:1,padding:"10px 14px",border:"1.5px solid #fde68a",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fffef5" }} />
               <button onClick={logExtra} style={{ background:"#f59e0b",color:"#fff",border:"none",borderRadius:12,padding:"0 18px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14 }}>+ Add</button>
             </div>
@@ -363,7 +452,9 @@ function DetailPage({ chapter, color, onUpdate, onBack, syncStatus }) {
 
         <Section title="📋 Topics">
           <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:12 }}>
-            {(chapter.topics||[]).length===0&&<div style={{ textAlign:"center",padding:"16px",color:"#94a3b8",fontSize:14 }}>No topics yet. Add one below!</div>}
+            {(chapter.topics||[]).length===0&&(
+              <div style={{ textAlign:"center",padding:"16px",color:"#94a3b8",fontSize:14 }}>No topics yet. Add one below!</div>
+            )}
             {(chapter.topics||[]).map((t,i)=>{
               const isLast=chapter.lastCompletedTopic===t.id;
               return (
@@ -385,7 +476,7 @@ function DetailPage({ chapter, color, onUpdate, onBack, syncStatus }) {
         </Section>
 
         <Section title="📝 Notes">
-          <textarea value={notes} onChange={e=>handleNotes(e.target.value)} placeholder="Add notes, derivations, student doubts, important formulas..."
+          <textarea value={notes} onChange={e=>handleNotes(e.target.value)} placeholder="Add notes, derivations, student doubts..."
             style={{ width:"100%",minHeight:120,padding:"14px",border:"1.5px solid #e2e8f0",borderRadius:14,fontSize:14,fontFamily:"inherit",resize:"vertical",outline:"none",background:"#fff",lineHeight:1.7,boxSizing:"border-box" }} />
           <div style={{ fontSize:11,color:"#94a3b8",marginTop:4 }}>☁️ Auto-saved to cloud</div>
         </Section>
@@ -424,7 +515,7 @@ function DashBar({ chapters, profile }) {
 // ── Main App ──────────────────────────────────────────────────────
 export default function App() {
   const [profile, setProfile] = useState(() => {
-    try { const s = localStorage.getItem("lt_profile"); return s ? JSON.parse(s) : null; } catch { return null; }
+    try { const s = localStorage.getItem("lt_session"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
   const [chapters, setChapters] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -436,64 +527,58 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [batchFilter, setBatchFilter] = useState(null);
 
-  // Load from cloud on login
+  // Load chapters from cloud on login
   useEffect(() => {
     if (!profile) return;
     setLoading(true);
-    db.load(profile.code).then(data => {
-      if (data) setChapters(data);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    db.loadChapters(profile.code)
+      .then(data => { setChapters(data || []); setLoading(false); })
+      .catch(() => setLoading(false));
   }, [profile]);
 
-  const saveProfile = p => {
-    localStorage.setItem("lt_profile", JSON.stringify(p));
-    setProfile(p);
-  };
-
-  const syncChapter = useCallback(async (chapter, teacherCode) => {
+  const syncChapter = useCallback(async (chapter) => {
+    if (!profile) return;
     setSyncStatus("saving");
-    try {
-      await db.upsert(teacherCode, chapter);
-      setSyncStatus("saved");
-      setTimeout(() => setSyncStatus(null), 2000);
-    } catch {
-      setSyncStatus("error");
-      setTimeout(() => setSyncStatus(null), 3000);
-    }
-  }, []);
+    const ok = await db.upsertChapter(profile.code, chapter);
+    setSyncStatus(ok ? "saved" : "error");
+    setTimeout(() => setSyncStatus(null), 2500);
+  }, [profile]);
 
   const updateChapter = useCallback(updated => {
     setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
-    syncChapter(updated, profile.code);
-  }, [profile, syncChapter]);
+    syncChapter(updated);
+  }, [syncChapter]);
 
   const addChapter = async (data) => {
     const chapter = { id: uid(), ...data, completedHours: 0, extraHours: 0, topics: [], notes: "", lastCompletedTopic: null };
     setChapters(prev => [...prev, chapter]);
     setSyncStatus("saving");
-    try {
-      await db.upsert(profile.code, chapter);
-      setSyncStatus("saved");
-      setTimeout(() => setSyncStatus(null), 2000);
-    } catch { setSyncStatus("error"); }
+    const ok = await db.upsertChapter(profile.code, chapter);
+    setSyncStatus(ok ? "saved" : "error");
+    setTimeout(() => setSyncStatus(null), 2500);
     setAddOpen(false);
   };
 
   const deleteChapter = async (id) => {
     if (!window.confirm("Delete this chapter? This cannot be undone.")) return;
     setChapters(prev => prev.filter(c => c.id !== id));
-    await db.remove(id);
+    await db.deleteChapter(id);
   };
 
   const editAndSave = async (data) => {
     const updated = { ...editChapter, ...data };
     setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
-    await db.upsert(profile.code, updated);
+    await db.upsertChapter(profile.code, updated);
     setEditChapter(null);
   };
 
-  if (!profile) return <Onboarding onDone={saveProfile} />;
+  const logout = () => {
+    localStorage.removeItem("lt_session");
+    setProfile(null);
+    setChapters([]);
+  };
+
+  if (!profile) return <Onboarding onDone={p => { setProfile(p); }} />;
 
   const batches = [...new Set(chapters.map(c => c.batchCode))].sort();
   const getBatchColor = b => BATCH_COLORS[batches.indexOf(b) % BATCH_COLORS.length];
@@ -523,17 +608,17 @@ export default function App() {
           </div>
           <div style={{ display:"flex",gap:8,alignItems:"center" }}>
             {syncStatus && <SyncBadge status={syncStatus} />}
-            <button onClick={() => setExportOpen(true)} style={{ background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center" }}>📊</button>
-            <button onClick={() => { localStorage.removeItem("lt_profile"); setProfile(null); setChapters([]); }} style={{ background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center" }}>👤</button>
-            <button onClick={() => setAddOpen(true)} style={{ background:"#6366f1",color:"#fff",border:"none",borderRadius:10,padding:"0 14px",height:36,cursor:"pointer",fontSize:14,fontWeight:700,fontFamily:"inherit" }}>+ Add</button>
+            <button onClick={()=>setExportOpen(true)} style={{ background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center" }}>📊</button>
+            <button onClick={logout} title="Logout" style={{ background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center" }}>🔒</button>
+            <button onClick={()=>setAddOpen(true)} style={{ background:"#6366f1",color:"#fff",border:"none",borderRadius:10,padding:"0 14px",height:36,cursor:"pointer",fontSize:14,fontWeight:700,fontFamily:"inherit" }}>+ Add</button>
           </div>
         </div>
 
         {loading ? (
-          <div style={{ textAlign:"center",padding:"60px 20px",color:"#6366f1" }}>
+          <div style={{ textAlign:"center",padding:"60px 20px" }}>
             <div style={{ fontSize:40,marginBottom:16 }}>☁️</div>
-            <div style={{ fontWeight:700,fontSize:16 }}>Loading your data from cloud...</div>
-            <div style={{ fontSize:13,color:"#94a3b8",marginTop:8 }}>Please wait</div>
+            <div style={{ fontWeight:700,fontSize:16,color:"#6366f1" }}>Loading your data...</div>
+            <div style={{ fontSize:13,color:"#94a3b8",marginTop:8 }}>Fetching from cloud</div>
           </div>
         ) : (
           <>
@@ -570,9 +655,9 @@ export default function App() {
         )}
       </div>
 
-      {addOpen && <ChapterFormModal onSave={addChapter} onClose={() => setAddOpen(false)} />}
-      {editChapter && <ChapterFormModal chapter={editChapter} onSave={editAndSave} onClose={() => setEditChapter(null)} />}
-      {exportOpen && <ExportModal chapters={chapters} onClose={() => setExportOpen(false)} />}
+      {addOpen && <ChapterFormModal onSave={addChapter} onClose={()=>setAddOpen(false)} />}
+      {editChapter && <ChapterFormModal chapter={editChapter} onSave={editAndSave} onClose={()=>setEditChapter(null)} />}
+      {exportOpen && <ExportModal chapters={chapters} onClose={()=>setExportOpen(false)} />}
     </>
   );
 }
