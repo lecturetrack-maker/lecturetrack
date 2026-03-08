@@ -1,76 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
 
-// ── Supabase Config ───────────────────────────────────────────────
-const SUPABASE_URL = "https://ddfmkfkvvadzlihiulnj.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkZm1rZmt2dmFkemxpaGl1bG5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0MzUwOTEsImV4cCI6MjA4ODAxMTA5MX0.2SsoVouiV4_U57-yEMU3e0OBQLWcbcLTYh1_3878KiM";
-
-// ── Supabase DB ───────────────────────────────────────────────────
-const db = {
-  async loadProfile(code) {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/teachers?code=eq.${encodeURIComponent(code)}&limit=1`,
-      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
-    );
-    const rows = await res.json();
-    return rows?.[0] || null;
-  },
-
-  async saveProfile(profile) {
-    await fetch(`${SUPABASE_URL}/rest/v1/teachers`, {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json", Prefer: "resolution=merge-duplicates"
-      },
-      body: JSON.stringify({
-        code: profile.code, name: profile.name,
-        gender: profile.gender, pin: profile.pin,
-        updated_at: new Date().toISOString()
-      })
-    });
-  },
-
-  async loadChapters(teacherCode) {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/chapters?teacher_code=eq.${encodeURIComponent(teacherCode)}&order=created_at`,
-      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
-    );
-    if (!res.ok) return [];
-    const rows = await res.json();
-    return rows.map(r => ({
-      id: r.id, batchCode: r.batch_code, name: r.name,
-      totalHours: r.total_hours, completedHours: r.completed_hours,
-      extraHours: r.extra_hours || 0, topics: r.topics || [],
-      notes: r.notes || "", lastCompletedTopic: r.last_completed_topic
-    }));
-  },
-
-  async upsertChapter(teacherCode, chapter) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/chapters`, {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json", Prefer: "resolution=merge-duplicates"
-      },
-      body: JSON.stringify({
-        id: chapter.id, teacher_code: teacherCode,
-        batch_code: chapter.batchCode, name: chapter.name,
-        total_hours: chapter.totalHours, completed_hours: chapter.completedHours,
-        extra_hours: chapter.extraHours || 0, topics: chapter.topics || [],
-        notes: chapter.notes || "", last_completed_topic: chapter.lastCompletedTopic || null,
-        updated_at: new Date().toISOString()
-      })
-    });
-    return res.ok;
-  },
-
-  async deleteChapter(id) {
-    await fetch(`${SUPABASE_URL}/rest/v1/chapters?id=eq.${id}`, {
-      method: "DELETE",
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
-    });
-  }
-};
+// ── Supabase Client ───────────────────────────────────────────────
+const supabase = createClient(
+  "https://ddfmkfkvvadzlihiulnj.supabase.co",
+  "sb_publishable_CX_sPadRs8lkJZ2pHyQuZw_vHA_D4P6"
+);
 
 // ── Helpers ───────────────────────────────────────────────────────
 function uid() { return Math.random().toString(36).slice(2, 9); }
@@ -102,11 +37,41 @@ function buildCSV(chapters) {
   return rows.map(r => r.map(v => `"${v}"`).join(",")).join("\n");
 }
 
+function toRow(teacherCode, c) {
+  return {
+    id: c.id,
+    teacher_code: teacherCode,
+    batch_code: c.batchCode,
+    name: c.name,
+    total_hours: c.totalHours,
+    completed_hours: c.completedHours,
+    extra_hours: c.extraHours || 0,
+    topics: c.topics || [],
+    notes: c.notes || "",
+    last_completed_topic: c.lastCompletedTopic || null,
+    updated_at: new Date().toISOString()
+  };
+}
+
+function fromRow(r) {
+  return {
+    id: r.id,
+    batchCode: r.batch_code,
+    name: r.name,
+    totalHours: r.total_hours,
+    completedHours: r.completed_hours,
+    extraHours: r.extra_hours || 0,
+    topics: r.topics || [],
+    notes: r.notes || "",
+    lastCompletedTopic: r.last_completed_topic
+  };
+}
+
 // ── UI Primitives ─────────────────────────────────────────────────
 function PBar({ pct }) {
   return (
-    <div style={{ background: "rgba(255,255,255,.25)", borderRadius: 99, height: 7, overflow: "hidden" }}>
-      <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: "#fff", borderRadius: 99, transition: "width .6s" }} />
+    <div style={{ background:"rgba(255,255,255,.25)",borderRadius:99,height:7,overflow:"hidden" }}>
+      <div style={{ width:`${Math.min(pct,100)}%`,height:"100%",background:"#fff",borderRadius:99,transition:"width .6s" }} />
     </div>
   );
 }
@@ -153,28 +118,28 @@ function Section({ title, children }) {
 
 function SyncBadge({ status }) {
   const cfg = {
-    saving: { bg:"#eef2ff", color:"#6366f1", text:"⏳ Saving..." },
-    saved:  { bg:"#dcfce7", color:"#16a34a", text:"☁️ Saved to Cloud" },
-    error:  { bg:"#fee2e2", color:"#dc2626", text:"❌ Save failed — check connection" },
+    saving: { bg:"#eef2ff",color:"#6366f1",text:"⏳ Saving..." },
+    saved:  { bg:"#dcfce7",color:"#16a34a",text:"☁️ Saved to Cloud" },
+    error:  { bg:"#fee2e2",color:"#dc2626",text:"❌ Save failed" },
   }[status];
   if (!cfg) return null;
   return (
-    <div style={{ background:cfg.bg,color:cfg.color,fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:99,display:"inline-flex",alignItems:"center",gap:4 }}>
+    <div style={{ background:cfg.bg,color:cfg.color,fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:99,display:"inline-flex",alignItems:"center" }}>
       {cfg.text}
     </div>
   );
 }
 
-// ── Onboarding (Register/Login) ───────────────────────────────────
+// ── Onboarding ────────────────────────────────────────────────────
 function Onboarding({ onDone }) {
-  const [mode, setMode] = useState("login"); // login | register
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [pin, setPin] = useState("");
-  const [confirmPin, setConfirmPin] = useState("");
-  const [gender, setGender] = useState("male");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [mode,setMode] = useState("login");
+  const [name,setName] = useState("");
+  const [code,setCode] = useState("");
+  const [pin,setPin] = useState("");
+  const [confirmPin,setConfirmPin] = useState("");
+  const [gender,setGender] = useState("male");
+  const [loading,setLoading] = useState(false);
+  const [error,setError] = useState("");
 
   const h = new Date().getHours();
   const gw = h<12?"Good Morning ☀️":h<17?"Good Afternoon 🌤️":"Good Evening 🌙";
@@ -184,28 +149,38 @@ function Onboarding({ onDone }) {
     if (!code.trim() || !pin.trim()) { setError("Please enter your code and PIN"); return; }
     setLoading(true); setError("");
     try {
-      const profile = await db.loadProfile(code.trim().toUpperCase());
-      if (!profile) { setError("❌ Code not found. Please register first."); setLoading(false); return; }
-      if (profile.pin !== pin.trim()) { setError("❌ Wrong PIN. Please try again."); setLoading(false); return; }
-      localStorage.setItem("lt_session", JSON.stringify({ code: profile.code, name: profile.name, gender: profile.gender, pin: profile.pin }));
-      onDone({ code: profile.code, name: profile.name, gender: profile.gender, pin: profile.pin });
-    } catch { setError("❌ Connection failed. Check your internet."); }
+      const { data, error: err } = await supabase
+        .from("teachers")
+        .select("*")
+        .eq("code", code.trim().toUpperCase())
+        .single();
+      if (err || !data) { setError("❌ Code not found. Please register first."); setLoading(false); return; }
+      if (data.pin !== pin.trim()) { setError("❌ Wrong PIN. Try again."); setLoading(false); return; }
+      const profile = { code: data.code, name: data.name, gender: data.gender, pin: data.pin };
+      localStorage.setItem("lt_session", JSON.stringify(profile));
+      onDone(profile);
+    } catch { setError("❌ Connection failed. Check internet."); }
     setLoading(false);
   };
 
   const handleRegister = async () => {
-    if (!name.trim() || !code.trim() || !pin.trim()) { setError("Please fill all fields"); return; }
+    if (!name.trim()||!code.trim()||!pin.trim()) { setError("Please fill all fields"); return; }
     if (pin.length < 4) { setError("PIN must be at least 4 digits"); return; }
     if (pin !== confirmPin) { setError("PINs do not match"); return; }
     setLoading(true); setError("");
     try {
-      const existing = await db.loadProfile(code.trim().toUpperCase());
-      if (existing) { setError("❌ This code is already taken. Choose another."); setLoading(false); return; }
+      const { data: existing } = await supabase
+        .from("teachers")
+        .select("code")
+        .eq("code", code.trim().toUpperCase())
+        .single();
+      if (existing) { setError("❌ Code already taken. Choose another."); setLoading(false); return; }
       const profile = { code: code.trim().toUpperCase(), name: name.trim(), gender, pin: pin.trim() };
-      await db.saveProfile(profile);
+      const { error: err } = await supabase.from("teachers").insert(profile);
+      if (err) { setError("❌ Registration failed: " + err.message); setLoading(false); return; }
       localStorage.setItem("lt_session", JSON.stringify(profile));
       onDone(profile);
-    } catch { setError("❌ Registration failed. Check your internet."); }
+    } catch(e) { setError("❌ Error: " + e.message); }
     setLoading(false);
   };
 
@@ -221,7 +196,6 @@ function Onboarding({ onDone }) {
           </div>
         </div>
 
-        {/* Toggle */}
         <div style={{ display:"flex",background:"#f1f5f9",borderRadius:12,padding:4,marginBottom:20,gap:4 }}>
           {["login","register"].map(m=>(
             <button key={m} onClick={()=>{setMode(m);setError("");}} style={{ flex:1,padding:"9px",borderRadius:10,border:"none",cursor:"pointer",background:mode===m?"#fff":"transparent",fontWeight:700,fontSize:14,color:mode===m?"#6366f1":"#64748b",fontFamily:"inherit",boxShadow:mode===m?"0 2px 8px rgba(0,0,0,.08)":"none",transition:"all .2s" }}>
@@ -230,7 +204,7 @@ function Onboarding({ onDone }) {
           ))}
         </div>
 
-        {mode==="register" && (
+        {mode==="register"&&(
           <>
             <TInput label="Your Full Name" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. P M Krishna" />
             <div style={{ marginBottom:14 }}>
@@ -248,29 +222,25 @@ function Onboarding({ onDone }) {
 
         <TInput label="Your Unique Code" value={code} onChange={e=>setCode(e.target.value.toUpperCase())} placeholder="e.g. PMK" />
         <TInput label="PIN (4-6 digits)" type="password" value={pin} onChange={e=>setPin(e.target.value)} placeholder="Enter your PIN" />
-        {mode==="register" && (
-          <TInput label="Confirm PIN" type="password" value={confirmPin} onChange={e=>setConfirmPin(e.target.value)} placeholder="Re-enter your PIN" />
+        {mode==="register"&&(
+          <TInput label="Confirm PIN" type="password" value={confirmPin} onChange={e=>setConfirmPin(e.target.value)} placeholder="Re-enter PIN" />
         )}
 
-        {mode==="register" && name && code && (
+        {mode==="register"&&name&&code&&(
           <div style={{ background:"#eef2ff",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#4f46e5",fontWeight:700 }}>
             {gw}, {code} {sal}!
           </div>
         )}
 
-        {error && (
+        {error&&(
           <div style={{ background:"#fee2e2",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#dc2626",fontWeight:600 }}>
             {error}
           </div>
         )}
 
-        <div style={{ background:"#fffbeb",borderRadius:12,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#92400e",lineHeight:1.7 }}>
-          🔒 <strong>Your data is PIN protected.</strong> Only you can access it with your code + PIN combination.
-        </div>
-
         <button onClick={mode==="login"?handleLogin:handleRegister} disabled={loading}
           style={{ width:"100%",padding:13,background:"#6366f1",color:"#fff",border:"none",borderRadius:12,fontSize:16,fontWeight:800,cursor:"pointer",fontFamily:"inherit",opacity:loading?.7:1 }}>
-          {loading ? "Please wait..." : mode==="login" ? "Login →" : "Create Account →"}
+          {loading?"Please wait...":mode==="login"?"Login →":"Create Account →"}
         </button>
       </div>
     </div>
@@ -284,7 +254,7 @@ function ChapterFormModal({ chapter, onSave, onClose }) {
   const [hours,setHours]=useState(chapter?.totalHours||"");
   return (
     <Modal title={chapter?"Edit Chapter":"Add Chapter"} onClose={onClose}>
-      <TInput label="Batch Code" value={batch} onChange={e=>setBatch(e.target.value.toUpperCase())} placeholder="e.g. X1, R2, A3" />
+      <TInput label="Batch Code" value={batch} onChange={e=>setBatch(e.target.value.toUpperCase())} placeholder="e.g. X1, R2" />
       <TInput label="Chapter Name" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Rotational Motion" />
       <TInput label="Total Allotted Hours" type="number" value={hours} onChange={e=>setHours(e.target.value)} placeholder="e.g. 12" min={0} />
       <div style={{ display:"flex",gap:10,justifyContent:"flex-end",marginTop:6 }}>
@@ -446,7 +416,7 @@ function DetailPage({ chapter, color, onUpdate, onBack, syncStatus }) {
                 style={{ flex:1,padding:"10px 14px",border:"1.5px solid #fde68a",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fffef5" }} />
               <button onClick={logExtra} style={{ background:"#f59e0b",color:"#fff",border:"none",borderRadius:12,padding:"0 18px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14 }}>+ Add</button>
             </div>
-            <div style={{ fontSize:12,color:"#92400e" }}>Tracked separately and saved to cloud</div>
+            <div style={{ fontSize:12,color:"#92400e" }}>Tracked separately · saved to cloud</div>
           </div>
         </Section>
 
@@ -514,61 +484,69 @@ function DashBar({ chapters, profile }) {
 
 // ── Main App ──────────────────────────────────────────────────────
 export default function App() {
-  const [profile, setProfile] = useState(() => {
-    try { const s = localStorage.getItem("lt_session"); return s ? JSON.parse(s) : null; } catch { return null; }
+  const [profile,setProfile] = useState(()=>{
+    try { const s=localStorage.getItem("lt_session"); return s?JSON.parse(s):null; } catch { return null; }
   });
-  const [chapters, setChapters] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [syncStatus, setSyncStatus] = useState(null);
-  const [addOpen, setAddOpen] = useState(false);
-  const [editChapter, setEditChapter] = useState(null);
-  const [detailId, setDetailId] = useState(null);
-  const [exportOpen, setExportOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [batchFilter, setBatchFilter] = useState(null);
+  const [chapters,setChapters] = useState([]);
+  const [loading,setLoading] = useState(false);
+  const [syncStatus,setSyncStatus] = useState(null);
+  const [addOpen,setAddOpen] = useState(false);
+  const [editChapter,setEditChapter] = useState(null);
+  const [detailId,setDetailId] = useState(null);
+  const [exportOpen,setExportOpen] = useState(false);
+  const [search,setSearch] = useState("");
+  const [batchFilter,setBatchFilter] = useState(null);
 
-  // Load chapters from cloud on login
-  useEffect(() => {
+  // Load chapters from Supabase on login
+  useEffect(()=>{
     if (!profile) return;
     setLoading(true);
-    db.loadChapters(profile.code)
-      .then(data => { setChapters(data || []); setLoading(false); })
-      .catch(() => setLoading(false));
+    supabase
+      .from("chapters")
+      .select("*")
+      .eq("teacher_code", profile.code)
+      .order("created_at")
+      .then(({ data, error }) => {
+        if (!error && data) setChapters(data.map(fromRow));
+        setLoading(false);
+      });
   }, [profile]);
 
   const syncChapter = useCallback(async (chapter) => {
     if (!profile) return;
     setSyncStatus("saving");
-    const ok = await db.upsertChapter(profile.code, chapter);
-    setSyncStatus(ok ? "saved" : "error");
-    setTimeout(() => setSyncStatus(null), 2500);
+    const { error } = await supabase
+      .from("chapters")
+      .upsert(toRow(profile.code, chapter), { onConflict: "id" });
+    setSyncStatus(error ? "error" : "saved");
+    setTimeout(()=>setSyncStatus(null), 2500);
   }, [profile]);
 
   const updateChapter = useCallback(updated => {
-    setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
+    setChapters(prev => prev.map(c => c.id===updated.id ? updated : c));
     syncChapter(updated);
   }, [syncChapter]);
 
   const addChapter = async (data) => {
-    const chapter = { id: uid(), ...data, completedHours: 0, extraHours: 0, topics: [], notes: "", lastCompletedTopic: null };
+    const chapter = { id:uid(), ...data, completedHours:0, extraHours:0, topics:[], notes:"", lastCompletedTopic:null };
     setChapters(prev => [...prev, chapter]);
     setSyncStatus("saving");
-    const ok = await db.upsertChapter(profile.code, chapter);
-    setSyncStatus(ok ? "saved" : "error");
-    setTimeout(() => setSyncStatus(null), 2500);
+    const { error } = await supabase.from("chapters").insert(toRow(profile.code, chapter));
+    setSyncStatus(error ? "error" : "saved");
+    setTimeout(()=>setSyncStatus(null), 2500);
     setAddOpen(false);
   };
 
   const deleteChapter = async (id) => {
-    if (!window.confirm("Delete this chapter? This cannot be undone.")) return;
-    setChapters(prev => prev.filter(c => c.id !== id));
-    await db.deleteChapter(id);
+    if (!window.confirm("Delete this chapter? Cannot be undone.")) return;
+    setChapters(prev => prev.filter(c => c.id!==id));
+    await supabase.from("chapters").delete().eq("id", id);
   };
 
   const editAndSave = async (data) => {
     const updated = { ...editChapter, ...data };
-    setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
-    await db.upsertChapter(profile.code, updated);
+    setChapters(prev => prev.map(c => c.id===updated.id ? updated : c));
+    await supabase.from("chapters").upsert(toRow(profile.code, updated), { onConflict:"id" });
     setEditChapter(null);
   };
 
@@ -578,20 +556,20 @@ export default function App() {
     setChapters([]);
   };
 
-  if (!profile) return <Onboarding onDone={p => { setProfile(p); }} />;
+  if (!profile) return <Onboarding onDone={p=>{ setProfile(p); }} />;
 
-  const batches = [...new Set(chapters.map(c => c.batchCode))].sort();
-  const getBatchColor = b => BATCH_COLORS[batches.indexOf(b) % BATCH_COLORS.length];
+  const batches=[...new Set(chapters.map(c=>c.batchCode))].sort();
+  const getBatchColor=b=>BATCH_COLORS[batches.indexOf(b)%BATCH_COLORS.length];
+  const detailChapter=chapters.find(c=>c.id===detailId);
 
-  const detailChapter = chapters.find(c => c.id === detailId);
   if (detailChapter) return (
     <DetailPage chapter={detailChapter} color={getBatchColor(detailChapter.batchCode)}
-      onUpdate={updateChapter} onBack={() => setDetailId(null)} syncStatus={syncStatus} />
+      onUpdate={updateChapter} onBack={()=>setDetailId(null)} syncStatus={syncStatus} />
   );
 
-  const filtered = chapters
-    .filter(c => !batchFilter || c.batchCode === batchFilter)
-    .filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.batchCode.toLowerCase().includes(search.toLowerCase()));
+  const filtered=chapters
+    .filter(c=>!batchFilter||c.batchCode===batchFilter)
+    .filter(c=>c.name.toLowerCase().includes(search.toLowerCase())||c.batchCode.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <>
@@ -607,23 +585,22 @@ export default function App() {
             <div style={{ fontSize:11,color:"#94a3b8" }}>Physics · NEET / JEE</div>
           </div>
           <div style={{ display:"flex",gap:8,alignItems:"center" }}>
-            {syncStatus && <SyncBadge status={syncStatus} />}
+            {syncStatus&&<SyncBadge status={syncStatus} />}
             <button onClick={()=>setExportOpen(true)} style={{ background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center" }}>📊</button>
             <button onClick={logout} title="Logout" style={{ background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center" }}>🔒</button>
             <button onClick={()=>setAddOpen(true)} style={{ background:"#6366f1",color:"#fff",border:"none",borderRadius:10,padding:"0 14px",height:36,cursor:"pointer",fontSize:14,fontWeight:700,fontFamily:"inherit" }}>+ Add</button>
           </div>
         </div>
 
-        {loading ? (
+        {loading?(
           <div style={{ textAlign:"center",padding:"60px 20px" }}>
             <div style={{ fontSize:40,marginBottom:16 }}>☁️</div>
             <div style={{ fontWeight:700,fontSize:16,color:"#6366f1" }}>Loading your data...</div>
             <div style={{ fontSize:13,color:"#94a3b8",marginTop:8 }}>Fetching from cloud</div>
           </div>
-        ) : (
+        ):(
           <>
             <DashBar chapters={chapters} profile={profile} />
-
             {batches.length>0&&(
               <div style={{ display:"flex",gap:8,overflowX:"auto",paddingBottom:4,marginBottom:14,scrollbarWidth:"none" }}>
                 {["All",...batches].map(b=>(
@@ -631,10 +608,8 @@ export default function App() {
                 ))}
               </div>
             )}
-
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search chapter or batch..."
               style={{ width:"100%",padding:"11px 16px",border:"1.5px solid #e2e8f0",borderRadius:14,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",marginBottom:16,boxSizing:"border-box" }} />
-
             <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
               {filtered.length===0&&(
                 <div style={{ textAlign:"center",padding:"50px 20px",color:"#94a3b8" }}>
@@ -654,10 +629,9 @@ export default function App() {
           </>
         )}
       </div>
-
-      {addOpen && <ChapterFormModal onSave={addChapter} onClose={()=>setAddOpen(false)} />}
-      {editChapter && <ChapterFormModal chapter={editChapter} onSave={editAndSave} onClose={()=>setEditChapter(null)} />}
-      {exportOpen && <ExportModal chapters={chapters} onClose={()=>setExportOpen(false)} />}
+      {addOpen&&<ChapterFormModal onSave={addChapter} onClose={()=>setAddOpen(false)} />}
+      {editChapter&&<ChapterFormModal chapter={editChapter} onSave={editAndSave} onClose={()=>setEditChapter(null)} />}
+      {exportOpen&&<ExportModal chapters={chapters} onClose={()=>setExportOpen(false)} />}
     </>
   );
 }
