@@ -908,7 +908,7 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
           </div>
           <div style={{background:"linear-gradient(135deg,#fffbeb,#fef9c3)",border:"2px solid #fde68a",borderRadius:14,padding:"16px"}}>
             <div style={{fontSize:13,fontWeight:800,color:"#92400e",marginBottom:10}}>⭐ Extra Hours (Beyond Allotted)</div>
-            <div style={{display:"flex",gap:8"}}>
+            <div style={{display:"flex",gap:8}}>
               <div style={{flex:1}}>
                 <input type="number" min={0} step={0.0833} value={extraH} onChange={e=>setExtraH(e.target.value)} onKeyDown={e=>e.key==="Enter"&&logExtra()} placeholder="e.g. 0.5"
                   style={{width:"100%",padding:"11px 14px",border:"2px solid #fde68a",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fffef5",boxSizing:"border-box"}}/>
