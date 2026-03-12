@@ -6,57 +6,59 @@ const supabase = createClient(
   "sb_publishable_CX_sPadRs8lkJZ2pHyQuZw_vHA_D4P6"
 );
 
-// ── Helpers ───────────────────────────────────────────────────────
-function uid() { return Math.random().toString(36).slice(2, 9); }
+// ── Chapter Database ──────────────────────────────────────────────
+const CHAPTER_DB = {
+  Physics: ["Physical World & Measurement","Kinematics","Laws of Motion","Work, Energy & Power","Motion of System of Particles","Gravitation","Properties of Bulk Matter","Thermodynamics","Behaviour of Perfect Gas & Kinetic Theory","Oscillations","Waves","Electrostatics","Current Electricity","Magnetic Effects of Current","Magnetism & Matter","Electromagnetic Induction","Alternating Current","Electromagnetic Waves","Ray Optics","Wave Optics","Dual Nature of Radiation","Atoms","Nuclei","Electronic Devices","Communication Systems","Units & Dimensions","Motion in a Straight Line","Motion in a Plane","Circular Motion","Rotational Motion","Fluid Mechanics","Thermal Properties of Matter","Electric Charges & Fields","Electric Potential & Capacitance","Moving Charges & Magnetism","Semiconductor Electronics"],
+  Chemistry: ["Some Basic Concepts of Chemistry","Structure of Atom","Classification of Elements","Chemical Bonding","States of Matter","Thermodynamics","Equilibrium","Redox Reactions","Hydrogen","s-Block Elements","p-Block Elements","Organic Chemistry – Basic Principles","Hydrocarbons","Environmental Chemistry","Solid State","Solutions","Electrochemistry","Chemical Kinetics","Surface Chemistry","General Principles of Isolation","d & f Block Elements","Coordination Compounds","Haloalkanes & Haloarenes","Alcohols, Phenols & Ethers","Aldehydes, Ketones & Carboxylic Acids","Amines","Biomolecules","Polymers","Chemistry in Everyday Life","Mole Concept","Stoichiometry","Periodic Table","Ionic Equilibrium","Atomic Structure","Nuclear Chemistry"],
+  Biology: ["The Living World","Biological Classification","Plant Kingdom","Animal Kingdom","Morphology of Flowering Plants","Anatomy of Flowering Plants","Structural Organisation in Animals","Cell: The Unit of Life","Biomolecules","Cell Cycle & Cell Division","Transport in Plants","Mineral Nutrition","Photosynthesis","Respiration in Plants","Plant Growth & Development","Digestion & Absorption","Breathing & Exchange of Gases","Body Fluids & Circulation","Excretory Products","Locomotion & Movement","Neural Control & Coordination","Chemical Coordination","Reproduction in Organisms","Sexual Reproduction in Flowering Plants","Human Reproduction","Reproductive Health","Principles of Inheritance","Molecular Basis of Inheritance","Evolution","Human Health & Disease","Strategies for Enhancement","Microbes in Human Welfare","Biotechnology: Principles","Biotechnology Applications","Organisms & Populations","Ecosystem","Biodiversity","Environmental Issues"],
+  Mathematics: ["Sets","Relations & Functions","Trigonometric Functions","Principle of Mathematical Induction","Complex Numbers","Linear Inequalities","Permutations & Combinations","Binomial Theorem","Sequences & Series","Straight Lines","Conic Sections","3D Geometry – Introduction","Limits & Derivatives","Mathematical Reasoning","Statistics","Probability","Inverse Trigonometric Functions","Matrices","Determinants","Continuity & Differentiability","Application of Derivatives","Integrals","Application of Integrals","Differential Equations","Vector Algebra","Three Dimensional Geometry","Linear Programming","Bayes Theorem","Relations & Functions (XII)","Calculus","Coordinate Geometry","Algebra","Number Theory","Trigonometry"],
+};
+const ALL_CHAPTERS = [...new Set(Object.values(CHAPTER_DB).flat())].sort();
 
-// Convert decimal hours to "Xh Ym" display e.g. 1.25 → "1h 15m"
+// ── Helpers ───────────────────────────────────────────────────────
+function uid() { return Math.random().toString(36).slice(2,9); }
+
 function fmtHours(h) {
-  if (!h && h !== 0) return "0h";
-  const hrs = Math.floor(h);
-  const mins = Math.round((h - hrs) * 60);
-  if (mins === 0) return `${hrs}h`;
-  if (hrs === 0) return `${mins}m`;
+  if (!h && h!==0) return "0h";
+  const hrs=Math.floor(h), mins=Math.round((h-hrs)*60);
+  if (mins===0) return `${hrs}h`;
+  if (hrs===0) return `${mins}m`;
   return `${hrs}h ${mins}m`;
 }
 
-// Convert "Xh Ym" or decimal string to decimal number
 function parseHours(val) {
   if (!val) return 0;
-  const str = String(val).trim();
-  // Handle "1h 30m" or "1h30m" format
-  const hm = str.match(/^(\d+)h\s*(\d+)m$/i);
-  if (hm) return parseFloat(hm[1]) + parseFloat(hm[2]) / 60;
-  const hOnly = str.match(/^(\d+\.?\d*)h$/i);
+  const str=String(val).trim();
+  const hm=str.match(/^(\d+)h\s*(\d+)m$/i);
+  if (hm) return parseFloat(hm[1])+parseFloat(hm[2])/60;
+  const hOnly=str.match(/^(\d+\.?\d*)h$/i);
   if (hOnly) return parseFloat(hOnly[1]);
-  const mOnly = str.match(/^(\d+)m$/i);
-  if (mOnly) return parseFloat(mOnly[1]) / 60;
-  // Plain decimal: 1.25 = 1h 15m
-  const n = parseFloat(str);
-  return isNaN(n) ? 0 : n;
+  const mOnly=str.match(/^(\d+)m$/i);
+  if (mOnly) return parseFloat(mOnly[1])/60;
+  const n=parseFloat(str);
+  return isNaN(n)?0:n;
 }
 
-function roundToMinute(h) {
-  return Math.round(h * 60) / 60;
-}
+function roundToMinute(h) { return Math.round(h*60)/60; }
 
-function getStatus(completed, total) {
+function getStatus(completed,total) {
   if (!total) return "none";
-  const p = (completed / total) * 100;
-  if (p > 100) return "exceeded";
-  if (p >= 80) return "warning";
+  const p=(completed/total)*100;
+  if (p>100) return "exceeded";
+  if (p>=80) return "warning";
   return "ok";
 }
 
 const STATUS = {
-  ok:       { color: "#10b981", label: "On Track" },
-  warning:  { color: "#f59e0b", label: "Near Limit" },
-  exceeded: { color: "#ef4444", label: "Exceeded" },
-  none:     { color: "#94a3b8", label: "Not Started" },
+  ok:      {color:"#10b981",label:"On Track"},
+  warning: {color:"#f59e0b",label:"Near Limit"},
+  exceeded:{color:"#ef4444",label:"Exceeded"},
+  none:    {color:"#94a3b8",label:"Not Started"},
 };
 
-const BATCH_COLORS = ["#6366f1","#10b981","#f59e0b","#ef4444","#3b82f6","#8b5cf6","#ec4899","#14b8a6","#f97316","#06b6d4"];
+const BATCH_COLORS=["#6366f1","#10b981","#f59e0b","#ef4444","#3b82f6","#8b5cf6","#ec4899","#14b8a6","#f97316","#06b6d4"];
 
-const MOTIVATIONAL_QUOTES = [
+const MOTIVATIONAL_QUOTES=[
   "100 hours of dedication — you are a true legend! 🌟",
   "Every hour you teach lights up a student's future! 💡",
   "Great teachers don't just teach subjects — they build dreams! 🚀",
@@ -69,241 +71,230 @@ const MOTIVATIONAL_QUOTES = [
   "Behind every successful student is a dedicated teacher like you! ❤️",
 ];
 
-const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","Multiple Subjects"];
+const SUBJECT_EMOJI={"Physics":"⚡","Chemistry":"🧪","Biology":"🧬","Mathematics":"📐","Multiple Subjects":"📚"};
 
-function buildCSV(chapters) {
-  const rows = [["Batch","Chapter","Allotted Hours","Taken Hours","Extra Hours","Remaining Hours","Progress %"]];
-  chapters.forEach(c => {
-    const rem = Math.max(0, c.totalHours - c.completedHours);
-    const pct = c.totalHours > 0 ? ((c.completedHours / c.totalHours) * 100).toFixed(1) + "%" : "0%";
-    rows.push([c.batchCode, c.name, fmtHours(c.totalHours), fmtHours(c.completedHours), fmtHours(c.extraHours||0), fmtHours(rem), pct]);
-  });
-  return rows.map(r => r.map(v => `"${v}"`).join(",")).join("\n");
+function todayStr() { return new Date().toISOString().split("T")[0]; }
+
+function fmtDate(d) {
+  if (!d) return "";
+  return new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});
 }
 
-function toRow(teacherCode, c) {
+function buildCSV(chapters) {
+  const rows=[["Batch","Chapter","Allotted","Taken","Extra","Remaining","Progress %"]];
+  chapters.forEach(c=>{
+    const rem=Math.max(0,c.totalHours-c.completedHours);
+    const pct=c.totalHours>0?((c.completedHours/c.totalHours)*100).toFixed(1)+"%":"0%";
+    rows.push([c.batchCode,c.name,fmtHours(c.totalHours),fmtHours(c.completedHours),fmtHours(c.extraHours||0),fmtHours(rem),pct]);
+  });
+  return rows.map(r=>r.map(v=>`"${v}"`).join(",")).join("\n");
+}
+
+function toRow(teacherCode,c) {
   return {
-    id: c.id, teacher_code: teacherCode, batch_code: c.batchCode, name: c.name,
-    total_hours: c.totalHours, completed_hours: c.completedHours,
-    extra_hours: c.extraHours || 0, topics: c.topics || [],
-    notes: c.notes || "", last_completed_topic: c.lastCompletedTopic || null,
-    hour_logs: c.hourLogs || [],
-    updated_at: new Date().toISOString()
+    id:c.id, teacher_code:teacherCode, batch_code:c.batchCode, name:c.name,
+    total_hours:c.totalHours, completed_hours:c.completedHours,
+    extra_hours:c.extraHours||0, topics:c.topics||[],
+    notes:c.notes||"", last_completed_topic:c.lastCompletedTopic||null,
+    hour_logs:c.hourLogs||[], updated_at:new Date().toISOString()
   };
 }
 
 function fromRow(r) {
   return {
-    id: r.id, batchCode: r.batch_code, name: r.name,
-    totalHours: r.total_hours, completedHours: r.completed_hours,
-    extraHours: r.extra_hours || 0, topics: r.topics || [],
-    notes: r.notes || "", lastCompletedTopic: r.last_completed_topic,
-    hourLogs: r.hour_logs || []
+    id:r.id, batchCode:r.batch_code, name:r.name,
+    totalHours:r.total_hours, completedHours:r.completed_hours,
+    extraHours:r.extra_hours||0, topics:r.topics||[],
+    notes:r.notes||"", lastCompletedTopic:r.last_completed_topic,
+    hourLogs:r.hour_logs||[]
   };
 }
 
-function todayStr() {
-  return new Date().toISOString().split("T")[0];
-}
-
-function fmtDate(d) {
-  if (!d) return "";
-  const dt = new Date(d);
-  return dt.toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" });
-}
-
-// ── UI Primitives ─────────────────────────────────────────────────
-function PBar({ pct }) {
+// ── Splash Screen ─────────────────────────────────────────────────
+function SplashScreen() {
   return (
-    <div style={{ background:"rgba(255,255,255,.25)",borderRadius:99,height:7,overflow:"hidden" }}>
-      <div style={{ width:`${Math.min(pct,100)}%`,height:"100%",background:"#fff",borderRadius:99,transition:"width .6s" }} />
-    </div>
-  );
-}
-
-function Modal({ title, onClose, children }) {
-  useEffect(() => {
-    const h = e => e.key === "Escape" && onClose?.();
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
-  return (
-    <div onClick={onClose} style={{ position:"fixed",inset:0,background:"rgba(15,23,42,.6)",backdropFilter:"blur(6px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:"#fff",borderRadius:20,padding:26,width:"100%",maxWidth:440,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.25)" }}>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
-          <h3 style={{ margin:0,fontSize:17,fontWeight:800,color:"#0f172a" }}>{title}</h3>
-          {onClose && <button onClick={onClose} style={{ background:"#f1f5f9",border:"none",borderRadius:99,width:32,height:32,cursor:"pointer",fontSize:18,color:"#64748b" }}>×</button>}
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function TInput({ label, value, onChange, placeholder, type="text", min, step }) {
-  return (
-    <div style={{ marginBottom:14 }}>
-      {label && <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:5 }}>{label}</label>}
-      <input type={type} value={value} onChange={onChange} placeholder={placeholder} min={min} step={step}
-        style={{ width:"100%",padding:"11px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box" }}
-        onFocus={e=>e.target.style.borderColor="#6366f1"}
-        onBlur={e=>e.target.style.borderColor="#e2e8f0"} />
-    </div>
-  );
-}
-
-function Section({ title, children }) {
-  return (
-    <div style={{ background:"#fff",borderRadius:18,padding:18,marginBottom:16,boxShadow:"0 2px 10px rgba(0,0,0,.05)" }}>
-      <div style={{ fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:14 }}>{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function SyncBadge({ status }) {
-  const cfg = {
-    saving: { bg:"#eef2ff",color:"#6366f1",text:"⏳ Saving..." },
-    saved:  { bg:"#dcfce7",color:"#16a34a",text:"☁️ Saved to Cloud" },
-    error:  { bg:"#fee2e2",color:"#dc2626",text:"❌ Save failed" },
-  }[status];
-  if (!cfg) return null;
-  return (
-    <div style={{ background:cfg.bg,color:cfg.color,fontSize:12,fontWeight:700,padding:"5px 14px",borderRadius:99,display:"inline-flex",alignItems:"center" }}>
-      {cfg.text}
+    <div style={{position:"fixed",inset:0,background:"linear-gradient(135deg,#4f46e5 0%,#7c3aed 50%,#6366f1 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:999}}>
+      <style>{`
+        @keyframes popIn{0%{transform:scale(0.5);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+        @keyframes slideUp{0%{transform:translateY(30px);opacity:0}100%{transform:translateY(0);opacity:1}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+        .splash-icon{animation:popIn .6s cubic-bezier(.175,.885,.32,1.275) forwards}
+        .splash-title{animation:slideUp .5s ease .3s both}
+        .splash-sub{animation:slideUp .5s ease .5s both}
+        .splash-dot{animation:pulse 1.2s ease .8s infinite}
+      `}</style>
+      <div className="splash-icon" style={{fontSize:80,marginBottom:16}}>👨‍🏫</div>
+      <div className="splash-title" style={{fontSize:36,fontWeight:900,color:"#fff",letterSpacing:"-1px",marginBottom:6}}>LectureTrack</div>
+      <div className="splash-sub" style={{fontSize:15,color:"rgba(255,255,255,.7)",fontWeight:600,marginBottom:40}}>NEET · JEE Coaching</div>
+      <div className="splash-dot" style={{width:8,height:8,background:"rgba(255,255,255,.6)",borderRadius:"50%"}}/>
     </div>
   );
 }
 
 // ── Congrats Screen ───────────────────────────────────────────────
-function CongratsScreen({ profile, totalHours, onClose }) {
-  const quote = MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
-  const sal = profile.gender === "male" ? "Sir" : "Ma'am";
-  const subjectEmoji = {
-    "Physics":"⚡", "Chemistry":"🧪", "Biology":"🧬",
-    "Mathematics":"📐", "Multiple Subjects":"📚"
-  }[profile.subject] || "📖";
+function CongratsScreen({profile,totalHours,onClose}) {
+  const quote=MOTIVATIONAL_QUOTES[Math.floor(Math.random()*MOTIVATIONAL_QUOTES.length)];
+  const sal=profile.gender==="male"?"Sir":"Ma'am";
+  const emoji=SUBJECT_EMOJI[profile.subject]||"📖";
   return (
-    <div style={{ position:"fixed",inset:0,background:"linear-gradient(135deg,#6366f1,#4338ca)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:30,textAlign:"center",overflowY:"auto" }}>
-      <div style={{ fontSize:80,marginBottom:10 }}>🎉</div>
-      <div style={{ fontSize:28,fontWeight:900,color:"#fff",marginBottom:8 }}>Congratulations!</div>
-      <div style={{ fontSize:18,fontWeight:700,color:"rgba(255,255,255,.9)",marginBottom:4 }}>{profile.code} {sal}</div>
-      {profile.subject && (
-        <div style={{ fontSize:14,color:"rgba(255,255,255,.7)",marginBottom:6 }}>
-          {subjectEmoji} {profile.subject} Teacher
-        </div>
-      )}
-      <div style={{ fontSize:15,color:"rgba(255,255,255,.7)",marginBottom:24 }}>
-        You've completed <strong style={{ color:"#fde68a" }}>{fmtHours(totalHours)}</strong> of lectures! 🏆
+    <div style={{position:"fixed",inset:0,background:"linear-gradient(135deg,#6366f1,#4338ca)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:30,textAlign:"center",overflowY:"auto"}}>
+      <style>{`@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-20px)}} .bounce{animation:bounce 1s ease infinite}`}</style>
+      <div className="bounce" style={{fontSize:80,marginBottom:10}}>🎉</div>
+      <div style={{fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>Congratulations!</div>
+      <div style={{fontSize:18,fontWeight:700,color:"rgba(255,255,255,.9)",marginBottom:4}}>{profile.code} {sal}</div>
+      {profile.subject&&<div style={{fontSize:14,color:"rgba(255,255,255,.7)",marginBottom:8}}>{emoji} {profile.subject} Teacher</div>}
+      <div style={{fontSize:15,color:"rgba(255,255,255,.7)",marginBottom:28}}>You've completed <strong style={{color:"#fde68a"}}>{fmtHours(totalHours)}</strong> of lectures! 🏆</div>
+      <div style={{background:"rgba(255,255,255,.15)",borderRadius:20,padding:"22px 26px",maxWidth:340,marginBottom:30,backdropFilter:"blur(10px)"}}>
+        <div style={{fontSize:36,marginBottom:12}}>💡</div>
+        <div style={{fontSize:15,color:"#fff",fontWeight:600,lineHeight:1.8}}>{quote}</div>
       </div>
-      <div style={{ background:"rgba(255,255,255,.15)",borderRadius:18,padding:"20px 24px",maxWidth:340,marginBottom:30 }}>
-        <div style={{ fontSize:32,marginBottom:10 }}>💡</div>
-        <div style={{ fontSize:15,color:"#fff",fontWeight:600,lineHeight:1.7 }}>{quote}</div>
-      </div>
-      <div style={{ display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center" }}>
-        <div style={{ background:"rgba(255,255,255,.2)",borderRadius:12,padding:"10px 20px",color:"#fff",fontWeight:700,fontSize:13 }}>
-          🎯 {fmtHours(totalHours)} Completed
-        </div>
-      </div>
-      <button onClick={onClose} style={{ marginTop:30,background:"#fff",color:"#6366f1",border:"none",borderRadius:14,padding:"13px 40px",fontSize:16,fontWeight:800,cursor:"pointer",fontFamily:"inherit" }}>
+      <button onClick={onClose} style={{background:"#fff",color:"#6366f1",border:"none",borderRadius:16,padding:"14px 44px",fontSize:16,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 8px 24px rgba(0,0,0,.2)"}}>
         Continue Teaching →
       </button>
     </div>
   );
 }
 
-// ── Onboarding ────────────────────────────────────────────────────
-function Onboarding({ onDone }) {
-  const [mode,setMode] = useState("login");
-  const [name,setName] = useState("");
-  const [code,setCode] = useState("");
-  const [pin,setPin] = useState("");
-  const [confirmPin,setConfirmPin] = useState("");
-  const [gender,setGender] = useState("male");
-  const [subject,setSubject] = useState("Physics");
-  const [loading,setLoading] = useState(false);
-  const [error,setError] = useState("");
+// ── Chapter Autocomplete ──────────────────────────────────────────
+function ChapterAutocomplete({value,onChange,subject}) {
+  const [open,setOpen]=useState(false);
+  const [suggestions,setSuggestions]=useState([]);
+  const ref=useRef();
 
-  const h = new Date().getHours();
-  const gw = h<12?"Good Morning ☀️":h<17?"Good Afternoon 🌤️":"Good Evening 🌙";
-  const sal = gender==="male"?"Sir":"Ma'am";
+  useEffect(()=>{
+    const handler=e=>{ if(ref.current&&!ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown",handler);
+    return ()=>document.removeEventListener("mousedown",handler);
+  },[]);
 
-  const handleLogin = async () => {
-    if (!code.trim()||!pin.trim()) { setError("Please enter code and PIN"); return; }
-    setLoading(true); setError("");
-    try {
-      const { data, error:err } = await supabase.from("teachers").select("*").eq("code",code.trim().toUpperCase()).single();
-      if (err||!data) { setError("❌ Code not found. Register first."); setLoading(false); return; }
-      if (data.pin !== pin.trim()) { setError("❌ Wrong PIN. Try again."); setLoading(false); return; }
-      const profile = { code:data.code, name:data.name, gender:data.gender, pin:data.pin, subject:data.subject||"" };
-      localStorage.setItem("lt_session", JSON.stringify(profile));
-      onDone(profile);
-    } catch { setError("❌ Connection failed. Check internet."); }
-    setLoading(false);
+  const handleInput=v=>{
+    onChange(v);
+    if (v.length<1){setSuggestions([]);setOpen(false);return;}
+    const pool=subject&&subject!=="Multiple Subjects"&&CHAPTER_DB[subject]?CHAPTER_DB[subject]:ALL_CHAPTERS;
+    const filtered=pool.filter(c=>c.toLowerCase().includes(v.toLowerCase())).slice(0,7);
+    setSuggestions(filtered);
+    setOpen(filtered.length>0);
   };
-
-  const handleRegister = async () => {
-    if (!name.trim()||!code.trim()||!pin.trim()) { setError("Fill all fields"); return; }
-    if (pin.length < 4) { setError("PIN must be at least 4 digits"); return; }
-    if (pin !== confirmPin) { setError("PINs do not match"); return; }
-    setLoading(true); setError("");
-    try {
-      const { data:existing } = await supabase.from("teachers").select("code").eq("code",code.trim().toUpperCase()).single();
-      if (existing) { setError("❌ Code taken. Choose another."); setLoading(false); return; }
-      const profile = { code:code.trim().toUpperCase(), name:name.trim(), gender, pin:pin.trim(), subject };
-      const { error:err } = await supabase.from("teachers").insert(profile);
-      if (err) { setError("❌ Registration failed: "+err.message); setLoading(false); return; }
-      localStorage.setItem("lt_session", JSON.stringify(profile));
-      onDone(profile);
-    } catch(e) { setError("❌ Error: "+e.message); }
-    setLoading(false);
-  };
-
-  const SUBJECT_OPTIONS = [
-    { label:"⚡ Physics",    value:"Physics" },
-    { label:"🧪 Chemistry",  value:"Chemistry" },
-    { label:"🧬 Biology",    value:"Biology" },
-    { label:"📐 Mathematics",value:"Mathematics" },
-    { label:"📚 Multiple",   value:"Multiple Subjects" },
-  ];
 
   return (
-    <div style={{ minHeight:"100vh",background:"linear-gradient(135deg,#6366f1,#4338ca)",display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}>
-      <div style={{ background:"#fff",borderRadius:24,padding:32,width:"100%",maxWidth:400,boxShadow:"0 24px 60px rgba(0,0,0,.2)" }}>
-        <div style={{ textAlign:"center",marginBottom:24 }}>
-          <div style={{ fontSize:48 }}>👨‍🏫</div>
-          <h2 style={{ margin:"10px 0 4px",fontSize:24,fontWeight:900,color:"#0f172a" }}>LectureTrack</h2>
-          <p style={{ margin:0,color:"#94a3b8",fontSize:13 }}>NEET / JEE Coaching</p>
-          <div style={{ marginTop:8,background:"#dcfce7",borderRadius:99,padding:"4px 14px",display:"inline-block",fontSize:12,color:"#16a34a",fontWeight:700 }}>
-            🔒 PIN Protected · ☁️ Cloud Saved
-          </div>
+    <div ref={ref} style={{position:"relative",marginBottom:14}}>
+      <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Chapter Name</label>
+      <input value={value} onChange={e=>handleInput(e.target.value)} placeholder="Type to search chapters..."
+        onFocus={()=>value&&suggestions.length>0&&setOpen(true)}
+        style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box",transition:"border .2s"}}
+        onMouseEnter={e=>e.target.style.borderColor="#6366f1"}
+        onMouseLeave={e=>{if(document.activeElement!==e.target)e.target.style.borderColor="#e2e8f0"}}
+      />
+      {open&&(
+        <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",borderRadius:14,boxShadow:"0 12px 40px rgba(0,0,0,.15)",zIndex:200,maxHeight:240,overflowY:"auto",marginTop:4,border:"1.5px solid #e2e8f0"}}>
+          {suggestions.map((s,i)=>(
+            <div key={i} onMouseDown={()=>{onChange(s);setOpen(false);}}
+              style={{padding:"11px 16px",cursor:"pointer",fontSize:14,fontWeight:600,color:"#1e293b",borderBottom:"1px solid #f1f5f9",transition:"background .15s"}}
+              onMouseEnter={e=>e.currentTarget.style.background="#f0f4ff"}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              📖 {s}
+            </div>
+          ))}
         </div>
-        <div style={{ display:"flex",background:"#f1f5f9",borderRadius:12,padding:4,marginBottom:20,gap:4 }}>
+      )}
+    </div>
+  );
+}
+
+// ── Onboarding ────────────────────────────────────────────────────
+function Onboarding({onDone}) {
+  const [mode,setMode]=useState("login");
+  const [name,setName]=useState("");
+  const [code,setCode]=useState("");
+  const [pin,setPin]=useState("");
+  const [confirmPin,setConfirmPin]=useState("");
+  const [gender,setGender]=useState("male");
+  const [subject,setSubject]=useState("Physics");
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState("");
+
+  const hr=new Date().getHours();
+  const gw=hr<12?"Good Morning ☀️":hr<17?"Good Afternoon 🌤️":"Good Evening 🌙";
+  const sal=gender==="male"?"Sir":"Ma'am";
+
+  const handleLogin=async()=>{
+    if(!code.trim()||!pin.trim()){setError("Enter code and PIN");return;}
+    setLoading(true);setError("");
+    try{
+      const{data,error:err}=await supabase.from("teachers").select("*").eq("code",code.trim().toUpperCase()).single();
+      if(err||!data){setError("❌ Code not found. Register first.");setLoading(false);return;}
+      if(data.pin!==pin.trim()){setError("❌ Wrong PIN. Try again.");setLoading(false);return;}
+      const profile={code:data.code,name:data.name,gender:data.gender,pin:data.pin,subject:data.subject||"Physics",photo:data.photo||null};
+      localStorage.setItem("lt_session",JSON.stringify(profile));
+      onDone(profile);
+    }catch{setError("❌ Connection failed. Check internet.");}
+    setLoading(false);
+  };
+
+  const handleRegister=async()=>{
+    if(!name.trim()||!code.trim()||!pin.trim()){setError("Fill all fields");return;}
+    if(pin.length<4){setError("PIN must be at least 4 digits");return;}
+    if(pin!==confirmPin){setError("PINs do not match");return;}
+    setLoading(true);setError("");
+    try{
+      const{data:existing}=await supabase.from("teachers").select("code").eq("code",code.trim().toUpperCase()).single();
+      if(existing){setError("❌ Code taken. Choose another.");setLoading(false);return;}
+      const profile={code:code.trim().toUpperCase(),name:name.trim(),gender,pin:pin.trim(),subject,photo:null};
+      const{error:err}=await supabase.from("teachers").insert(profile);
+      if(err){setError("❌ Registration failed: "+err.message);setLoading(false);return;}
+      localStorage.setItem("lt_session",JSON.stringify(profile));
+      onDone(profile);
+    }catch(e){setError("❌ Error: "+e.message);}
+    setLoading(false);
+  };
+
+  const SUBJECT_OPTIONS=[
+    {label:"⚡ Physics",value:"Physics"},
+    {label:"🧪 Chemistry",value:"Chemistry"},
+    {label:"🧬 Biology",value:"Biology"},
+    {label:"📐 Mathematics",value:"Mathematics"},
+    {label:"📚 Multiple",value:"Multiple Subjects"},
+  ];
+
+  return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#4f46e5,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}} .fade-up{animation:fadeUp .4s ease forwards}`}</style>
+      <div className="fade-up" style={{background:"#fff",borderRadius:28,padding:32,width:"100%",maxWidth:420,boxShadow:"0 32px 80px rgba(0,0,0,.25)"}}>
+        <div style={{textAlign:"center",marginBottom:26}}>
+          <div style={{width:72,height:72,background:"linear-gradient(135deg,#6366f1,#4338ca)",borderRadius:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,margin:"0 auto 12px"}}>👨‍🏫</div>
+          <h2 style={{margin:"0 0 4px",fontSize:26,fontWeight:900,color:"#0f172a",letterSpacing:"-0.5px"}}>LectureTrack</h2>
+          <p style={{margin:0,color:"#94a3b8",fontSize:13,fontWeight:500}}>NEET · JEE Coaching</p>
+        </div>
+        <div style={{display:"flex",background:"#f1f5f9",borderRadius:14,padding:4,marginBottom:22,gap:4}}>
           {["login","register"].map(m=>(
-            <button key={m} onClick={()=>{setMode(m);setError("");}} style={{ flex:1,padding:"9px",borderRadius:10,border:"none",cursor:"pointer",background:mode===m?"#fff":"transparent",fontWeight:700,fontSize:14,color:mode===m?"#6366f1":"#64748b",fontFamily:"inherit",boxShadow:mode===m?"0 2px 8px rgba(0,0,0,.08)":"none" }}>
+            <button key={m} onClick={()=>{setMode(m);setError("");}} style={{flex:1,padding:"10px",borderRadius:11,border:"none",cursor:"pointer",background:mode===m?"#fff":"transparent",fontWeight:800,fontSize:14,color:mode===m?"#6366f1":"#64748b",fontFamily:"inherit",boxShadow:mode===m?"0 2px 10px rgba(99,102,241,.15)":"none",transition:"all .2s"}}>
               {m==="login"?"🔑 Login":"📝 Register"}
             </button>
           ))}
         </div>
         {mode==="register"&&(
           <>
-            <TInput label="Full Name" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. P M Krishna" />
-            <div style={{ marginBottom:14 }}>
-              <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>Gender</label>
-              <div style={{ display:"flex",gap:10 }}>
+            <div style={{marginBottom:14}}>
+              <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Full Name</label>
+              <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. P M Krishna"
+                style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}} />
+            </div>
+            <div style={{marginBottom:14}}>
+              <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:6}}>Gender</label>
+              <div style={{display:"flex",gap:10}}>
                 {["male","female"].map(g=>(
-                  <button key={g} onClick={()=>setGender(g)} style={{ flex:1,padding:10,borderRadius:12,border:`2px solid ${gender===g?"#6366f1":"#e2e8f0"}`,background:gender===g?"#eef2ff":"#f8fafc",fontWeight:700,cursor:"pointer",color:gender===g?"#6366f1":"#64748b",fontFamily:"inherit",fontSize:13 }}>
+                  <button key={g} onClick={()=>setGender(g)} style={{flex:1,padding:"10px",borderRadius:12,border:`2px solid ${gender===g?"#6366f1":"#e2e8f0"}`,background:gender===g?"#eef2ff":"#f8fafc",fontWeight:700,cursor:"pointer",color:gender===g?"#6366f1":"#64748b",fontFamily:"inherit",fontSize:13,transition:"all .2s"}}>
                     {g==="male"?"👨 Male":"👩 Female"}
                   </button>
                 ))}
               </div>
             </div>
-            <div style={{ marginBottom:14 }}>
-              <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:6 }}>Subject You Teach</label>
-              <div style={{ display:"flex",flexWrap:"wrap",gap:8 }}>
+            <div style={{marginBottom:16}}>
+              <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:8}}>Subject You Teach</label>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
                 {SUBJECT_OPTIONS.map(s=>(
                   <button key={s.value} onClick={()=>setSubject(s.value)}
-                    style={{ padding:"8px 14px",borderRadius:12,border:`2px solid ${subject===s.value?"#6366f1":"#e2e8f0"}`,background:subject===s.value?"#eef2ff":"#f8fafc",fontWeight:700,cursor:"pointer",color:subject===s.value?"#6366f1":"#64748b",fontFamily:"inherit",fontSize:12 }}>
+                    style={{padding:"8px 14px",borderRadius:12,border:`2px solid ${subject===s.value?"#6366f1":"#e2e8f0"}`,background:subject===s.value?"#eef2ff":"#f8fafc",fontWeight:700,cursor:"pointer",color:subject===s.value?"#6366f1":"#64748b",fontFamily:"inherit",fontSize:12,transition:"all .2s"}}>
                     {s.label}
                   </button>
                 ))}
@@ -311,17 +302,31 @@ function Onboarding({ onDone }) {
             </div>
           </>
         )}
-        <TInput label="Unique Code" value={code} onChange={e=>setCode(e.target.value.toUpperCase())} placeholder="e.g. PMK" />
-        <TInput label="PIN (4-6 digits)" type="password" value={pin} onChange={e=>setPin(e.target.value)} placeholder="Enter PIN" />
-        {mode==="register"&&<TInput label="Confirm PIN" type="password" value={confirmPin} onChange={e=>setConfirmPin(e.target.value)} placeholder="Re-enter PIN" />}
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Unique Code</label>
+          <input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} placeholder="e.g. PMK"
+            style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}} />
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>PIN (4–6 digits)</label>
+          <input type="password" value={pin} onChange={e=>setPin(e.target.value)} placeholder="Enter PIN"
+            style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}} />
+        </div>
+        {mode==="register"&&(
+          <div style={{marginBottom:14}}>
+            <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Confirm PIN</label>
+            <input type="password" value={confirmPin} onChange={e=>setConfirmPin(e.target.value)} placeholder="Re-enter PIN"
+              style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}} />
+          </div>
+        )}
         {mode==="register"&&name&&code&&(
-          <div style={{ background:"#eef2ff",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#4f46e5",fontWeight:700 }}>
+          <div style={{background:"linear-gradient(135deg,#eef2ff,#e0e7ff)",borderRadius:14,padding:"12px 16px",marginBottom:14,fontSize:13,color:"#4f46e5",fontWeight:700}}>
             {gw}, {code} {sal}! 👋
           </div>
         )}
-        {error&&<div style={{ background:"#fee2e2",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#dc2626",fontWeight:600 }}>{error}</div>}
+        {error&&<div style={{background:"#fee2e2",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#dc2626",fontWeight:600}}>{error}</div>}
         <button onClick={mode==="login"?handleLogin:handleRegister} disabled={loading}
-          style={{ width:"100%",padding:13,background:"#6366f1",color:"#fff",border:"none",borderRadius:12,fontSize:16,fontWeight:800,cursor:"pointer",fontFamily:"inherit",opacity:loading?.7:1 }}>
+          style={{width:"100%",padding:14,background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:14,fontSize:16,fontWeight:800,cursor:"pointer",fontFamily:"inherit",opacity:loading?.7:1,boxShadow:"0 6px 20px rgba(99,102,241,.4)",transition:"opacity .2s"}}>
           {loading?"Please wait...":mode==="login"?"Login →":"Create Account →"}
         </button>
       </div>
@@ -329,189 +334,458 @@ function Onboarding({ onDone }) {
   );
 }
 
-// ── Chapter Form ──────────────────────────────────────────────────
-function ChapterFormModal({ chapter, onSave, onClose }) {
+// ── Modal ─────────────────────────────────────────────────────────
+function Modal({title,onClose,children}) {
+  useEffect(()=>{
+    const h=e=>e.key==="Escape"&&onClose?.();
+    window.addEventListener("keydown",h);
+    return()=>window.removeEventListener("keydown",h);
+  },[onClose]);
+  return(
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",backdropFilter:"blur(6px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:22,padding:26,width:"100%",maxWidth:440,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.25)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <h3 style={{margin:0,fontSize:18,fontWeight:800,color:"#0f172a"}}>{title}</h3>
+          {onClose&&<button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:99,width:34,height:34,cursor:"pointer",fontSize:20,color:"#64748b",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Chapter Form Modal ────────────────────────────────────────────
+function ChapterFormModal({chapter,onSave,onClose,subject}) {
   const [name,setName]=useState(chapter?.name||"");
   const [batch,setBatch]=useState(chapter?.batchCode||"");
   const [hours,setHours]=useState(chapter?.totalHours||"");
-  return (
-    <Modal title={chapter?"Edit Chapter":"Add Chapter"} onClose={onClose}>
-      <TInput label="Batch Code" value={batch} onChange={e=>setBatch(e.target.value.toUpperCase())} placeholder="e.g. X1, R2" />
-      <TInput label="Chapter Name" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Rotational Motion" />
-      <div style={{ marginBottom:14 }}>
-        <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:5 }}>Total Allotted Hours</label>
-        <input type="number" value={hours} onChange={e=>setHours(e.target.value)} placeholder="e.g. 1.5 = 1h 30m" min={0} step={0.0833}
-          style={{ width:"100%",padding:"11px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box" }} />
-        {hours && <div style={{ fontSize:12,color:"#6366f1",marginTop:4,fontWeight:600 }}>= {fmtHours(parseFloat(hours)||0)}</div>}
+  return(
+    <Modal title={chapter?"✏️ Edit Chapter":"➕ Add Chapter"} onClose={onClose}>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Batch Code</label>
+        <input value={batch} onChange={e=>setBatch(e.target.value.toUpperCase())} placeholder="e.g. X1, R2"
+          style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}} />
       </div>
-      <div style={{ display:"flex",gap:10,justifyContent:"flex-end",marginTop:6 }}>
-        <button onClick={onClose} style={{ background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>Cancel</button>
+      <ChapterAutocomplete value={name} onChange={setName} subject={subject} />
+      <div style={{marginBottom:16}}>
+        <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Total Allotted Hours</label>
+        <input type="number" value={hours} onChange={e=>setHours(e.target.value)} placeholder="e.g. 1.5 = 1h 30m" min={0} step={0.0833}
+          style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}} />
+        {hours&&<div style={{fontSize:12,color:"#6366f1",marginTop:4,fontWeight:700}}>= {fmtHours(parseFloat(hours)||0)}</div>}
+      </div>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
         <button onClick={()=>{if(name.trim()&&batch.trim()&&hours)onSave({name:name.trim(),batchCode:batch.trim().toUpperCase(),totalHours:parseFloat(hours)})}}
-          style={{ background:"#6366f1",color:"#fff",border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>Save</button>
+          style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(99,102,241,.3)"}}>Save ✓</button>
       </div>
     </Modal>
   );
 }
 
-// ── Batch Page ────────────────────────────────────────────────────
-function BatchPage({ batchCode, color, chapters, onBack, onDeleteChapter, onEditChapter, onOpenChapter }) {
-  const totalAllotted = chapters.reduce((s,c)=>s+c.totalHours,0);
-  const totalDone = chapters.reduce((s,c)=>s+c.completedHours,0);
-  const pct = totalAllotted>0?(totalDone/totalAllotted)*100:0;
+// ── SyncBadge ─────────────────────────────────────────────────────
+function SyncBadge({status}) {
+  const cfg={
+    saving:{bg:"#eef2ff",color:"#6366f1",text:"⏳ Saving..."},
+    saved: {bg:"#dcfce7",color:"#16a34a",text:"☁️ Saved"},
+    error: {bg:"#fee2e2",color:"#dc2626",text:"❌ Failed"},
+  }[status];
+  if(!cfg) return null;
+  return <div style={{background:cfg.bg,color:cfg.color,fontSize:11,fontWeight:700,padding:"4px 12px",borderRadius:99}}>{cfg.text}</div>;
+}
 
-  const handleDeleteBatch = async () => {
-    if (!window.confirm(`Delete ALL chapters in batch ${batchCode}? This cannot be undone!`)) return;
-    for (const c of chapters) await onDeleteChapter(c.id, true);
-    onBack();
-  };
+// ── Progress Bar ──────────────────────────────────────────────────
+function PBar({pct,color="#fff",bg="rgba(255,255,255,.25)",height=8}) {
+  return(
+    <div style={{background:bg,borderRadius:99,height,overflow:"hidden"}}>
+      <div style={{width:`${Math.min(pct,100)}%`,height:"100%",background:color,borderRadius:99,transition:"width .7s ease"}}/>
+    </div>
+  );
+}
 
-  return (
-    <div style={{ minHeight:"100vh",background:"#f8fafc" }}>
-      <div style={{ background:`linear-gradient(135deg,${color},${color}bb)`,padding:"24px 20px 28px",color:"#fff",position:"relative",overflow:"hidden" }}>
-        <div style={{ position:"absolute",right:-30,top:-30,width:140,height:140,background:"rgba(255,255,255,.07)",borderRadius:"50%" }} />
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
-          <button onClick={onBack} style={{ background:"rgba(255,255,255,.2)",border:"none",borderRadius:10,padding:"7px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13 }}>← Back</button>
-          <button onClick={handleDeleteBatch} style={{ background:"rgba(239,68,68,.3)",border:"none",borderRadius:10,padding:"7px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13 }}>🗑️ Delete Batch</button>
+// ── Home Tab ──────────────────────────────────────────────────────
+function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus}) {
+  const totalAllotted=chapters.reduce((s,c)=>s+c.totalHours,0);
+  const totalDone=chapters.reduce((s,c)=>s+c.completedHours,0);
+  const totalExtra=chapters.reduce((s,c)=>s+(c.extraHours||0),0);
+  const pct=totalAllotted>0?(totalDone/totalAllotted)*100:0;
+  const hr=new Date().getHours();
+  const gw=hr<12?"Good Morning ☀️":hr<17?"Good Afternoon 🌤️":"Good Evening 🌙";
+  const sal=profile.gender==="male"?"Sir":"Ma'am";
+  const emoji=SUBJECT_EMOJI[profile.subject]||"📖";
+  const batches=[...new Set(chapters.map(c=>c.batchCode))].sort();
+
+  const recentChapters=[...chapters].sort((a,b)=>{
+    const aLast=a.hourLogs?.slice(-1)[0]?.date||"";
+    const bLast=b.hourLogs?.slice(-1)[0]?.date||"";
+    return bLast.localeCompare(aLast);
+  }).slice(0,3);
+
+  return(
+    <div style={{padding:"0 0 20px"}}>
+      {/* Hero Banner */}
+      <div style={{background:"linear-gradient(135deg,#4f46e5 0%,#7c3aed 60%,#6366f1 100%)",padding:"28px 20px 24px",color:"#fff",position:"relative",overflow:"hidden",borderRadius:"0 0 28px 28px"}}>
+        <div style={{position:"absolute",right:-40,top:-40,width:160,height:160,background:"rgba(255,255,255,.07)",borderRadius:"50%"}}/>
+        <div style={{position:"absolute",right:40,bottom:-20,width:80,height:80,background:"rgba(255,255,255,.05)",borderRadius:"50%"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+          <div>
+            <div style={{fontSize:13,opacity:.75,fontWeight:500}}>{gw},</div>
+            <div style={{fontSize:24,fontWeight:900,letterSpacing:"-.5px",marginTop:2}}>{profile.code} {sal} 👋</div>
+            <div style={{fontSize:12,opacity:.6,marginTop:2}}>{profile.name} · {emoji} {profile.subject||"Teacher"}</div>
+          </div>
+          {syncStatus&&<SyncBadge status={syncStatus}/>}
         </div>
-        <div style={{ fontSize:44,fontWeight:900,letterSpacing:"-1px",lineHeight:1 }}>{batchCode}</div>
-        <div style={{ fontSize:14,opacity:.8,marginTop:4,marginBottom:16 }}>{chapters.length} chapters</div>
-        <div style={{ display:"flex",gap:10,marginBottom:14 }}>
-          {[{label:"Allotted",val:fmtHours(totalAllotted)},{label:"Completed",val:fmtHours(totalDone)},{label:"Remaining",val:fmtHours(Math.max(0,totalAllotted-totalDone))}].map(s=>(
-            <div key={s.label} style={{ flex:1,background:"rgba(255,255,255,.2)",borderRadius:12,padding:"10px 4px",textAlign:"center" }}>
-              <div style={{ fontSize:15,fontWeight:800 }}>{s.val}</div>
-              <div style={{ fontSize:9,opacity:.8,fontWeight:600,marginTop:2 }}>{s.label}</div>
+        {/* Stats Row */}
+        <div style={{display:"flex",gap:10,marginBottom:16}}>
+          {[
+            {label:"Total Taken",val:fmtHours(totalDone),icon:"⏱️"},
+            {label:"Allotted",val:fmtHours(totalAllotted),icon:"📋"},
+            {label:"Extra",val:fmtHours(totalExtra),icon:"⭐"},
+          ].map(s=>(
+            <div key={s.label} style={{flex:1,background:"rgba(255,255,255,.15)",borderRadius:14,padding:"10px 8px",textAlign:"center",backdropFilter:"blur(4px)"}}>
+              <div style={{fontSize:16,marginBottom:2}}>{s.icon}</div>
+              <div style={{fontSize:15,fontWeight:900}}>{s.val}</div>
+              <div style={{fontSize:9,opacity:.75,fontWeight:600,marginTop:1}}>{s.label}</div>
             </div>
           ))}
         </div>
-        <div style={{ background:"rgba(255,255,255,.2)",borderRadius:99,height:7 }}>
-          <div style={{ width:`${Math.min(pct,100)}%`,height:"100%",background:"#fff",borderRadius:99 }} />
+        <PBar pct={pct}/>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,opacity:.8,fontWeight:600}}>
+          <span>{pct.toFixed(0)}% overall progress</span>
+          <span>{chapters.length} chapters · {batches.length} batches</span>
         </div>
-        <div style={{ fontSize:12,opacity:.8,marginTop:5 }}>{pct.toFixed(0)}% overall progress</div>
       </div>
 
-      <div style={{ padding:"20px 16px 60px",maxWidth:560,margin:"0 auto" }}>
-        <div style={{ fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:14 }}>Chapters in {batchCode}</div>
-        <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-          {chapters.map(c=>{
-            const cpct = c.totalHours>0?(c.completedHours/c.totalHours)*100:0;
-            const rem = Math.max(0,c.totalHours-c.completedHours);
-            return (
-              <div key={c.id} onClick={()=>onOpenChapter(c.id)} style={{ background:"#fff",borderRadius:16,padding:16,boxShadow:"0 2px 10px rgba(0,0,0,.06)",cursor:"pointer",border:`1.5px solid ${color}22` }}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
-                  <div style={{ fontSize:15,fontWeight:800,color:"#0f172a",flex:1 }}>{c.name}</div>
-                  <div style={{ display:"flex",gap:6 }} onClick={e=>e.stopPropagation()}>
-                    <button onClick={()=>onEditChapter(c)} style={{ background:"#eef2ff",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center" }}>✏️</button>
-                    <button onClick={()=>onDeleteChapter(c.id)} style={{ background:"#fee2e2",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center" }}>🗑️</button>
-                  </div>
-                </div>
-                <div style={{ display:"flex",gap:8,marginBottom:10 }}>
-                  {[{l:"Allotted",v:fmtHours(c.totalHours)},{l:"Taken",v:fmtHours(c.completedHours),c:"#10b981"},{l:"Extra",v:fmtHours(c.extraHours||0),c:"#f59e0b"},{l:"Left",v:fmtHours(rem),c:"#ef4444"}].map(s=>(
-                    <div key={s.l} style={{ flex:1,background:"#f8fafc",borderRadius:8,padding:"6px 4px",textAlign:"center" }}>
-                      <div style={{ fontSize:13,fontWeight:800,color:s.c||"#0f172a" }}>{s.v}</div>
-                      <div style={{ fontSize:9,color:"#94a3b8",fontWeight:600,marginTop:1 }}>{s.l}</div>
+      <div style={{padding:"20px 16px 0"}}>
+        {/* Batch Pills */}
+        {batches.length>0&&(
+          <div style={{marginBottom:20}}>
+            <div style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:10}}>🗂️ Your Batches</div>
+            <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:4,scrollbarWidth:"none"}}>
+              {batches.map((b,i)=>{
+                const bc=BATCH_COLORS[i%BATCH_COLORS.length];
+                const chs=chapters.filter(c=>c.batchCode===b);
+                const done=chs.reduce((s,c)=>s+c.completedHours,0);
+                const total=chs.reduce((s,c)=>s+c.totalHours,0);
+                const p=total>0?(done/total)*100:0;
+                return(
+                  <div key={b} onClick={()=>onOpenBatch(b)} style={{flexShrink:0,background:`linear-gradient(135deg,${bc},${bc}cc)`,borderRadius:16,padding:"12px 16px",color:"#fff",cursor:"pointer",minWidth:110,boxShadow:`0 4px 16px ${bc}44`}}>
+                    <div style={{fontSize:20,fontWeight:900,marginBottom:2}}>{b}</div>
+                    <div style={{fontSize:11,opacity:.8}}>{chs.length} chapters</div>
+                    <div style={{background:"rgba(255,255,255,.25)",borderRadius:99,height:4,marginTop:8}}>
+                      <div style={{width:`${Math.min(p,100)}%`,height:"100%",background:"#fff",borderRadius:99}}/>
                     </div>
-                  ))}
-                </div>
-                <div style={{ background:"#f1f5f9",borderRadius:99,height:5,overflow:"hidden" }}>
-                  <div style={{ width:`${Math.min(cpct,100)}%`,height:"100%",background:color,borderRadius:99,transition:"width .6s" }} />
-                </div>
-                <div style={{ fontSize:11,color:"#94a3b8",marginTop:4 }}>{cpct.toFixed(0)}% complete · Tap to open →</div>
-              </div>
-            );
+                    <div style={{fontSize:10,opacity:.8,marginTop:3}}>{p.toFixed(0)}%</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Recent Activity */}
+        {recentChapters.length>0&&(
+          <div>
+            <div style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:10}}>🕐 Recent Chapters</div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {recentChapters.map(c=>{
+                const bc=BATCH_COLORS[[...new Set(chapters.map(x=>x.batchCode))].sort().indexOf(c.batchCode)%BATCH_COLORS.length];
+                const p=c.totalHours>0?(c.completedHours/c.totalHours)*100:0;
+                return(
+                  <div key={c.id} onClick={()=>onOpenChapter(c.id)} style={{background:"#fff",borderRadius:18,padding:"16px 18px",boxShadow:"0 2px 12px rgba(0,0,0,.07)",cursor:"pointer",border:`2px solid ${bc}22`,display:"flex",alignItems:"center",gap:14}}>
+                    <div style={{width:44,height:44,background:`linear-gradient(135deg,${bc},${bc}99)`,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#fff",flexShrink:0}}>{c.batchCode}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:14,fontWeight:800,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
+                      <div style={{marginTop:6}}>
+                        <PBar pct={p} color={bc} bg="#f1f5f9" height={5}/>
+                      </div>
+                      <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{fmtHours(c.completedHours)} / {fmtHours(c.totalHours)} · {p.toFixed(0)}%</div>
+                    </div>
+                    <div style={{fontSize:18,color:"#94a3b8"}}>→</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {chapters.length===0&&(
+          <div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}>
+            <div style={{fontSize:56,marginBottom:16}}>📭</div>
+            <div style={{fontWeight:800,fontSize:18,color:"#475569",marginBottom:8}}>No chapters yet</div>
+            <div style={{fontSize:14}}>Go to Chapters tab to add your first chapter</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Chapters Tab ──────────────────────────────────────────────────
+function ChaptersTab({chapters,profile,onOpenChapter,onAddChapter,onEditChapter,onDeleteChapter,syncStatus}) {
+  const [search,setSearch]=useState("");
+  const [batchFilter,setBatchFilter]=useState(null);
+  const batches=[...new Set(chapters.map(c=>c.batchCode))].sort();
+
+  const filtered=chapters
+    .filter(c=>!batchFilter||c.batchCode===batchFilter)
+    .filter(c=>c.name.toLowerCase().includes(search.toLowerCase())||c.batchCode.toLowerCase().includes(search.toLowerCase()));
+
+  return(
+    <div style={{padding:"20px 16px 20px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontSize:20,fontWeight:900,color:"#0f172a"}}>📚 Chapters</div>
+        <button onClick={onAddChapter} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"10px 18px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:14,boxShadow:"0 4px 14px rgba(99,102,241,.35)"}}>+ Add</button>
+      </div>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search chapters..."
+        style={{width:"100%",padding:"12px 16px",border:"2px solid #e2e8f0",borderRadius:14,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",marginBottom:12,boxSizing:"border-box"}}/>
+      {batches.length>0&&(
+        <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:6,marginBottom:14,scrollbarWidth:"none"}}>
+          {["All",...batches].map(b=>{
+            const active=(!batchFilter&&b==="All")||batchFilter===b;
+            const bc=b==="All"?"#0f172a":BATCH_COLORS[[...batches].indexOf(b)%BATCH_COLORS.length];
+            return <button key={b} onClick={()=>setBatchFilter(b==="All"?null:b)} style={{flexShrink:0,padding:"7px 18px",borderRadius:99,border:"none",cursor:"pointer",background:active?bc:"#f1f5f9",color:active?"#fff":"#475569",fontWeight:700,fontSize:13,fontFamily:"inherit",transition:"all .2s"}}>{b}</button>;
           })}
         </div>
+      )}
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {filtered.length===0&&<div style={{textAlign:"center",padding:"50px 20px",color:"#94a3b8"}}><div style={{fontSize:44}}>📭</div><div style={{fontWeight:700,marginTop:12,fontSize:16}}>No chapters</div></div>}
+        {filtered.map(c=>{
+          const bc=BATCH_COLORS[batches.indexOf(c.batchCode)%BATCH_COLORS.length];
+          const pct=c.totalHours>0?(c.completedHours/c.totalHours)*100:0;
+          const rem=Math.max(0,c.totalHours-c.completedHours);
+          const status=getStatus(c.completedHours,c.totalHours);
+          return(
+            <div key={c.id} onClick={()=>onOpenChapter(c.id)} style={{background:`linear-gradient(135deg,${bc},${bc}dd)`,borderRadius:20,padding:20,color:"#fff",cursor:"pointer",boxShadow:`0 6px 24px ${bc}44`,position:"relative",overflow:"hidden",transition:"transform .2s"}}
+              onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"}
+              onMouseLeave={e=>e.currentTarget.style.transform="none"}>
+              <div style={{position:"absolute",right:-20,top:-20,width:110,height:110,background:"rgba(255,255,255,.07)",borderRadius:"50%"}}/>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                <div style={{fontSize:32,fontWeight:900,letterSpacing:"-1px"}}>{c.batchCode}</div>
+                <div style={{display:"flex",gap:6}} onClick={e=>e.stopPropagation()}>
+                  <button onClick={()=>onEditChapter(c)} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:9,width:32,height:32,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>✏️</button>
+                  <button onClick={()=>onDeleteChapter(c.id)} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:9,width:32,height:32,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>🗑️</button>
+                </div>
+              </div>
+              <div style={{fontSize:16,fontWeight:700,marginBottom:14,opacity:.95}}>{c.name}</div>
+              <div style={{display:"flex",gap:8,marginBottom:12}}>
+                {[{l:"Allotted",v:fmtHours(c.totalHours)},{l:"Taken",v:fmtHours(c.completedHours)},{l:"Extra",v:fmtHours(c.extraHours||0)},{l:"Left",v:fmtHours(rem)}].map(s=>(
+                  <div key={s.l} style={{flex:1,background:"rgba(255,255,255,.18)",borderRadius:10,padding:"8px 4px",textAlign:"center"}}>
+                    <div style={{fontSize:12,fontWeight:800}}>{s.v}</div>
+                    <div style={{fontSize:9,opacity:.8,fontWeight:600,marginTop:1}}>{s.l}</div>
+                  </div>
+                ))}
+              </div>
+              <PBar pct={pct}/>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,opacity:.85}}>
+                <span style={{fontWeight:700}}>{pct.toFixed(0)}% complete</span>
+                <span style={{background:"rgba(255,255,255,.2)",padding:"2px 10px",borderRadius:99,fontWeight:700}}>{STATUS[status].label}</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// ── Export Modal ──────────────────────────────────────────────────
-function ExportModal({ chapters, onClose }) {
-  const csv = buildCSV(chapters);
-  const [copied,setCopied]=useState(false);
-  return (
-    <Modal title="📊 Export Data" onClose={onClose}>
-      <div style={{ overflowX:"auto",borderRadius:12,border:"1.5px solid #e2e8f0",marginBottom:16 }}>
-        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11,fontFamily:"inherit",minWidth:380 }}>
-          <thead>
-            <tr style={{ background:"#6366f1",color:"#fff" }}>
-              {["Batch","Chapter","Allotted","Taken","Extra","Remaining","Progress"].map(h=>(
-                <th key={h} style={{ padding:"8px",textAlign:"left",fontWeight:700,whiteSpace:"nowrap" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {chapters.map((c,i)=>{
-              const rem=Math.max(0,c.totalHours-c.completedHours);
-              const pct=c.totalHours>0?((c.completedHours/c.totalHours)*100).toFixed(0)+"%":"0%";
-              return (
-                <tr key={c.id} style={{ background:i%2===0?"#f8fafc":"#fff" }}>
-                  <td style={{ padding:"7px 8px",fontWeight:800,color:"#6366f1" }}>{c.batchCode}</td>
-                  <td style={{ padding:"7px 8px" }}>{c.name}</td>
-                  <td style={{ padding:"7px 8px" }}>{fmtHours(c.totalHours)}</td>
-                  <td style={{ padding:"7px 8px",color:"#10b981",fontWeight:700 }}>{fmtHours(c.completedHours)}</td>
-                  <td style={{ padding:"7px 8px",color:"#f59e0b",fontWeight:700 }}>{fmtHours(c.extraHours||0)}</td>
-                  <td style={{ padding:"7px 8px",color:"#ef4444",fontWeight:700 }}>{fmtHours(rem)}</td>
-                  <td style={{ padding:"7px 8px",color:"#6366f1",fontWeight:700 }}>{pct}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+// ── Batches Tab ───────────────────────────────────────────────────
+function BatchesTab({chapters,onOpenBatch,onDeleteBatch}) {
+  const batches=[...new Set(chapters.map(c=>c.batchCode))].sort();
+  return(
+    <div style={{padding:"20px 16px 20px"}}>
+      <div style={{fontSize:20,fontWeight:900,color:"#0f172a",marginBottom:16}}>🗂️ Batches</div>
+      {batches.length===0&&<div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}><div style={{fontSize:44}}>📭</div><div style={{fontWeight:700,marginTop:12,fontSize:16}}>No batches yet</div></div>}
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {batches.map((b,i)=>{
+          const bc=BATCH_COLORS[i%BATCH_COLORS.length];
+          const chs=chapters.filter(c=>c.batchCode===b);
+          const done=chs.reduce((s,c)=>s+c.completedHours,0);
+          const total=chs.reduce((s,c)=>s+c.totalHours,0);
+          const p=total>0?(done/total)*100:0;
+          return(
+            <div key={b} onClick={()=>onOpenBatch(b)} style={{background:`linear-gradient(135deg,${bc},${bc}cc)`,borderRadius:20,padding:22,color:"#fff",cursor:"pointer",boxShadow:`0 6px 24px ${bc}44`,transition:"transform .2s",position:"relative",overflow:"hidden"}}
+              onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"}
+              onMouseLeave={e=>e.currentTarget.style.transform="none"}>
+              <div style={{position:"absolute",right:-20,top:-20,width:110,height:110,background:"rgba(255,255,255,.07)",borderRadius:"50%"}}/>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                <div style={{fontSize:38,fontWeight:900,letterSpacing:"-1px"}}>{b}</div>
+                <button onClick={e=>{e.stopPropagation();onDeleteBatch(b);}} style={{background:"rgba(239,68,68,.3)",border:"none",borderRadius:10,padding:"7px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>🗑️ Delete</button>
+              </div>
+              <div style={{fontSize:13,opacity:.8,marginBottom:14}}>{chs.length} chapters</div>
+              <div style={{display:"flex",gap:10,marginBottom:12}}>
+                {[{l:"Allotted",v:fmtHours(total)},{l:"Done",v:fmtHours(done)},{l:"Left",v:fmtHours(Math.max(0,total-done))}].map(s=>(
+                  <div key={s.l} style={{flex:1,background:"rgba(255,255,255,.18)",borderRadius:12,padding:"10px 4px",textAlign:"center"}}>
+                    <div style={{fontSize:14,fontWeight:800}}>{s.v}</div>
+                    <div style={{fontSize:9,opacity:.8,fontWeight:600,marginTop:1}}>{s.l}</div>
+                  </div>
+                ))}
+              </div>
+              <PBar pct={p}/>
+              <div style={{fontSize:12,opacity:.8,marginTop:5,fontWeight:600}}>{p.toFixed(0)}% · Tap to manage →</div>
+            </div>
+          );
+        })}
       </div>
-      <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-        <button onClick={()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=`LectureTrack_${new Date().toLocaleDateString("en-IN").replace(/\//g,"-")}.csv`;a.click();}}
-          style={{ padding:12,background:"#6366f1",color:"#fff",border:"none",borderRadius:12,fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>
-          ⬇️ Download CSV
-        </button>
-        <button onClick={()=>{navigator.clipboard.writeText(csv);setCopied(true);setTimeout(()=>setCopied(false),2000);}}
-          style={{ padding:12,background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>
-          {copied?"✅ Copied!":"📋 Copy to Clipboard"}
-        </button>
-      </div>
-    </Modal>
+    </div>
   );
 }
 
-// ── Chapter Card ──────────────────────────────────────────────────
-function ChapterCard({ chapter, color, onClick, onEdit, onDelete }) {
-  const pct = chapter.totalHours>0?(chapter.completedHours/chapter.totalHours)*100:0;
-  const remaining = Math.max(0,chapter.totalHours-chapter.completedHours);
-  const status = getStatus(chapter.completedHours,chapter.totalHours);
-  return (
-    <div onClick={onClick} style={{ background:`linear-gradient(135deg,${color},${color}cc)`,borderRadius:18,padding:20,color:"#fff",cursor:"pointer",boxShadow:`0 4px 20px ${color}44`,transition:"transform .2s,box-shadow .2s",position:"relative",overflow:"hidden" }}
-      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";}}
-      onMouseLeave={e=>{e.currentTarget.style.transform="none";}}
-    >
-      <div style={{ position:"absolute",right:-20,top:-20,width:100,height:100,background:"rgba(255,255,255,.08)",borderRadius:"50%" }} />
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6 }}>
-        <div style={{ fontSize:34,fontWeight:900,letterSpacing:"-.5px",lineHeight:1 }}>{chapter.batchCode}</div>
-        <div style={{ display:"flex",gap:6 }} onClick={e=>e.stopPropagation()}>
-          <button onClick={onEdit} style={{ background:"rgba(255,255,255,.2)",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center" }}>✏️</button>
-          <button onClick={onDelete} style={{ background:"rgba(255,255,255,.2)",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center" }}>🗑️</button>
+// ── Profile Tab ───────────────────────────────────────────────────
+function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
+  const [editPhoto,setEditPhoto]=useState(false);
+  const fileRef=useRef();
+  const totalDone=chapters.reduce((s,c)=>s+c.completedHours,0);
+  const totalAllotted=chapters.reduce((s,c)=>s+c.totalHours,0);
+  const totalExtra=chapters.reduce((s,c)=>s+(c.extraHours||0),0);
+  const batches=[...new Set(chapters.map(c=>c.batchCode))];
+  const emoji=SUBJECT_EMOJI[profile.subject]||"📖";
+
+  const handlePhotoUpload=e=>{
+    const file=e.target.files[0];
+    if(!file) return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const photoData=ev.target.result;
+      const updated={...profile,photo:photoData};
+      localStorage.setItem("lt_session",JSON.stringify(updated));
+      onUpdateProfile(updated);
+      // Save to Supabase too
+      supabase.from("teachers").update({photo:photoData}).eq("code",profile.code);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const downloadCSV=()=>{
+    const csv=buildCSV(chapters);
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+    a.download=`LectureTrack_${profile.code}_${new Date().toLocaleDateString("en-IN").replace(/\//g,"-")}.csv`;
+    a.click();
+  };
+
+  return(
+    <div style={{padding:"20px 16px 20px"}}>
+      {/* Profile Card */}
+      <div style={{background:"linear-gradient(135deg,#4f46e5,#7c3aed)",borderRadius:24,padding:"28px 24px",color:"#fff",marginBottom:20,textAlign:"center",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",right:-30,top:-30,width:130,height:130,background:"rgba(255,255,255,.07)",borderRadius:"50%"}}/>
+        {/* Photo */}
+        <div style={{position:"relative",display:"inline-block",marginBottom:14}}>
+          <div style={{width:90,height:90,borderRadius:"50%",border:"4px solid rgba(255,255,255,.4)",overflow:"hidden",margin:"0 auto",background:"rgba(255,255,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40}}>
+            {profile.photo
+              ?<img src={profile.photo} alt="profile" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              :<span>{profile.gender==="female"?"👩":"👨"}</span>
+            }
+          </div>
+          <button onClick={()=>fileRef.current.click()} style={{position:"absolute",bottom:0,right:0,background:"#fff",border:"none",borderRadius:"50%",width:28,height:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,.2)",fontSize:14}}>📷</button>
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoUpload} style={{display:"none"}}/>
+        <div style={{fontSize:22,fontWeight:900,marginBottom:4}}>{profile.name}</div>
+        <div style={{fontSize:14,opacity:.8,marginBottom:4}}>{emoji} {profile.subject||"Teacher"}</div>
+        <div style={{fontSize:13,opacity:.6,background:"rgba(255,255,255,.15)",borderRadius:99,padding:"4px 16px",display:"inline-block"}}>{profile.code}</div>
+      </div>
+
+      {/* Stats */}
+      <div style={{background:"#fff",borderRadius:20,padding:20,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,.07)"}}>
+        <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:14}}>📊 Your Stats</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          {[
+            {label:"Hours Taken",val:fmtHours(totalDone),color:"#6366f1",icon:"⏱️"},
+            {label:"Allotted",val:fmtHours(totalAllotted),color:"#10b981",icon:"📋"},
+            {label:"Extra Hours",val:fmtHours(totalExtra),color:"#f59e0b",icon:"⭐"},
+            {label:"Batches",val:batches.length,color:"#ef4444",icon:"🗂️"},
+            {label:"Chapters",val:chapters.length,color:"#8b5cf6",icon:"📚"},
+            {label:"Progress",val:(totalAllotted>0?(totalDone/totalAllotted)*100:0).toFixed(0)+"%",color:"#14b8a6",icon:"📈"},
+          ].map(s=>(
+            <div key={s.label} style={{background:`${s.color}0f`,borderRadius:14,padding:"14px 16px",border:`1.5px solid ${s.color}22`}}>
+              <div style={{fontSize:20,marginBottom:4}}>{s.icon}</div>
+              <div style={{fontSize:20,fontWeight:900,color:s.color}}>{s.val}</div>
+              <div style={{fontSize:11,color:"#94a3b8",fontWeight:600,marginTop:2}}>{s.label}</div>
+            </div>
+          ))}
         </div>
       </div>
-      <div style={{ fontSize:16,fontWeight:700,marginBottom:14,opacity:.95 }}>{chapter.name}</div>
-      <div style={{ display:"flex",gap:8,marginBottom:12 }}>
-        {[{label:"Allotted",val:fmtHours(chapter.totalHours)},{label:"Taken",val:fmtHours(chapter.completedHours)},{label:"Extra",val:fmtHours(chapter.extraHours||0)},{label:"Left",val:fmtHours(remaining)}].map(s=>(
-          <div key={s.label} style={{ flex:1,background:"rgba(255,255,255,.18)",borderRadius:10,padding:"7px 4px",textAlign:"center" }}>
-            <div style={{ fontSize:12,fontWeight:800 }}>{s.val}</div>
-            <div style={{ fontSize:9,opacity:.8,fontWeight:600,marginTop:1 }}>{s.label}</div>
-          </div>
-        ))}
+
+      {/* Actions */}
+      <div style={{background:"#fff",borderRadius:20,padding:20,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,.07)"}}>
+        <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:14}}>⚡ Quick Actions</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <button onClick={downloadCSV} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px",background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:14,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14,boxShadow:"0 4px 14px rgba(99,102,241,.3)"}}>
+            <span style={{fontSize:22}}>📊</span>
+            <div style={{textAlign:"left"}}>
+              <div>Download Excel/CSV Report</div>
+              <div style={{fontSize:11,opacity:.75,fontWeight:500}}>Full chapter report for all batches</div>
+            </div>
+          </button>
+          <button onClick={onLogout} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px",background:"#fff",color:"#ef4444",border:"2px solid #fee2e2",borderRadius:14,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14}}>
+            <span style={{fontSize:22}}>🔒</span>
+            <div style={{textAlign:"left"}}>
+              <div>Logout</div>
+              <div style={{fontSize:11,color:"#94a3b8",fontWeight:500}}>Sign out of your account</div>
+            </div>
+          </button>
+        </div>
       </div>
-      <PBar pct={pct} />
-      <div style={{ display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,opacity:.9 }}>
-        <span style={{ fontWeight:700 }}>{pct.toFixed(0)}% complete</span>
-        <span style={{ background:"rgba(255,255,255,.2)",padding:"1px 8px",borderRadius:99,fontWeight:700 }}>{STATUS[status].label}</span>
-      </div>
-      <div style={{ marginTop:8,fontSize:11,opacity:.5 }}>Tap to open →</div>
+
+      <div style={{textAlign:"center",fontSize:12,color:"#cbd5e1",paddingBottom:10}}>LectureTrack v9 · Made with ❤️ for teachers</div>
     </div>
   );
 }
 
-// ── Detail Page ───────────────────────────────────────────────────
-function DetailPage({ chapter, color, onUpdate, onBack, syncStatus }) {
+// ── Batch Detail Page ─────────────────────────────────────────────
+function BatchPage({batchCode,color,chapters,onBack,onDeleteChapter,onEditChapter,onOpenChapter}) {
+  const total=chapters.reduce((s,c)=>s+c.totalHours,0);
+  const done=chapters.reduce((s,c)=>s+c.completedHours,0);
+  const pct=total>0?(done/total)*100:0;
+  return(
+    <div style={{minHeight:"100vh",background:"#f8fafc"}}>
+      <div style={{background:`linear-gradient(135deg,${color},${color}bb)`,padding:"24px 20px 28px",color:"#fff",position:"relative",overflow:"hidden",borderRadius:"0 0 24px 24px"}}>
+        <div style={{position:"absolute",right:-30,top:-30,width:140,height:140,background:"rgba(255,255,255,.07)",borderRadius:"50%"}}/>
+        <button onClick={onBack} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:12,padding:"8px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,marginBottom:16}}>← Back</button>
+        <div style={{fontSize:42,fontWeight:900,letterSpacing:"-1px"}}>{batchCode}</div>
+        <div style={{fontSize:13,opacity:.8,marginTop:4,marginBottom:16}}>{chapters.length} chapters</div>
+        <div style={{display:"flex",gap:10,marginBottom:14}}>
+          {[{l:"Allotted",v:fmtHours(total)},{l:"Completed",v:fmtHours(done)},{l:"Remaining",v:fmtHours(Math.max(0,total-done))}].map(s=>(
+            <div key={s.l} style={{flex:1,background:"rgba(255,255,255,.2)",borderRadius:12,padding:"10px 4px",textAlign:"center"}}>
+              <div style={{fontSize:15,fontWeight:800}}>{s.v}</div>
+              <div style={{fontSize:9,opacity:.8,fontWeight:600,marginTop:2}}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+        <PBar pct={pct}/>
+        <div style={{fontSize:12,opacity:.8,marginTop:5,fontWeight:600}}>{pct.toFixed(0)}% overall progress</div>
+      </div>
+      <div style={{padding:"20px 16px 80px"}}>
+        {chapters.map(c=>{
+          const cp=c.totalHours>0?(c.completedHours/c.totalHours)*100:0;
+          return(
+            <div key={c.id} onClick={()=>onOpenChapter(c.id)} style={{background:"#fff",borderRadius:18,padding:16,marginBottom:12,boxShadow:"0 2px 12px rgba(0,0,0,.06)",cursor:"pointer",border:`2px solid ${color}22`}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+                <div style={{fontSize:15,fontWeight:800,color:"#0f172a",flex:1}}>{c.name}</div>
+                <div style={{display:"flex",gap:6}} onClick={e=>e.stopPropagation()}>
+                  <button onClick={()=>onEditChapter(c)} style={{background:"#eef2ff",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✏️</button>
+                  <button onClick={()=>onDeleteChapter(c.id)} style={{background:"#fee2e2",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>🗑️</button>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8,marginBottom:10}}>
+                {[{l:"Allotted",v:fmtHours(c.totalHours)},{l:"Taken",v:fmtHours(c.completedHours),col:"#10b981"},{l:"Extra",v:fmtHours(c.extraHours||0),col:"#f59e0b"},{l:"Left",v:fmtHours(Math.max(0,c.totalHours-c.completedHours)),col:"#ef4444"}].map(s=>(
+                  <div key={s.l} style={{flex:1,background:"#f8fafc",borderRadius:8,padding:"6px 4px",textAlign:"center"}}>
+                    <div style={{fontSize:12,fontWeight:800,color:s.col||"#0f172a"}}>{s.v}</div>
+                    <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,marginTop:1}}>{s.l}</div>
+                  </div>
+                ))}
+              </div>
+              <PBar pct={cp} color={color} bg="#f1f5f9" height={5}/>
+              <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{cp.toFixed(0)}% · Tap to open →</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Chapter Detail Page ───────────────────────────────────────────
+function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
   const [logH,setLogH]=useState("");
   const [extraH,setExtraH]=useState("");
   const [logDate,setLogDate]=useState(todayStr());
@@ -519,503 +793,388 @@ function DetailPage({ chapter, color, onUpdate, onBack, syncStatus }) {
   const [newTopic,setNewTopic]=useState("");
   const [notes,setNotes]=useState(chapter.notes||"");
   const [showLogs,setShowLogs]=useState(false);
-  const [editLog,setEditLog]=useState(null); // {id, hours, date, note}
+  const [editLog,setEditLog]=useState(null);
   const ntRef=useRef(null);
 
   const pct=chapter.totalHours>0?(chapter.completedHours/chapter.totalHours)*100:0;
   const remaining=Math.max(0,chapter.totalHours-chapter.completedHours);
   const status=getStatus(chapter.completedHours,chapter.totalHours);
-  const logs = chapter.hourLogs || [];
+  const logs=chapter.hourLogs||[];
 
-  const logHours = () => {
-    const h = roundToMinute(parseHours(logH));
-    if (!h || h <= 0) return;
-    const newLog = { id:uid(), hours:h, date:logDate, note:logNote, type:"regular" };
-    const updated = {
-      ...chapter,
-      completedHours: roundToMinute(chapter.completedHours + h),
-      hourLogs: [...logs, newLog]
-    };
-    onUpdate(updated);
-    setLogH(""); setLogNote("");
+  const logHours=()=>{
+    const h=roundToMinute(parseHours(logH));
+    if(!h||h<=0) return;
+    const newLog={id:uid(),hours:h,date:logDate,note:logNote,type:"regular"};
+    onUpdate({...chapter,completedHours:roundToMinute(chapter.completedHours+h),hourLogs:[...logs,newLog]});
+    setLogH("");setLogNote("");
   };
 
-  const logExtra = () => {
-    const h = roundToMinute(parseHours(extraH));
-    if (!h || h <= 0) return;
-    const newLog = { id:uid(), hours:h, date:logDate, note:logNote+" (Extra)", type:"extra" };
-    const updated = {
-      ...chapter,
-      completedHours: roundToMinute(chapter.completedHours + h),
-      extraHours: roundToMinute((chapter.extraHours||0) + h),
-      hourLogs: [...logs, newLog]
-    };
-    onUpdate(updated);
-    setExtraH(""); setLogNote("");
+  const logExtra=()=>{
+    const h=roundToMinute(parseHours(extraH));
+    if(!h||h<=0) return;
+    const newLog={id:uid(),hours:h,date:logDate,note:logNote||"Extra",type:"extra"};
+    onUpdate({...chapter,completedHours:roundToMinute(chapter.completedHours+h),extraHours:roundToMinute((chapter.extraHours||0)+h),hourLogs:[...logs,newLog]});
+    setExtraH("");setLogNote("");
   };
 
-  const deleteLog = (logId) => {
-    const log = logs.find(l=>l.id===logId);
-    if (!log) return;
-    if (!window.confirm(`Remove ${fmtHours(log.hours)} logged on ${fmtDate(log.date)}?`)) return;
-    const newLogs = logs.filter(l=>l.id!==logId);
-    const updated = {
+  const deleteLog=logId=>{
+    const log=logs.find(l=>l.id===logId);
+    if(!log||!window.confirm(`Remove ${fmtHours(log.hours)} on ${fmtDate(log.date)}?`)) return;
+    onUpdate({
       ...chapter,
-      completedHours: roundToMinute(Math.max(0, chapter.completedHours - log.hours)),
-      extraHours: log.type==="extra" ? roundToMinute(Math.max(0,(chapter.extraHours||0)-log.hours)) : chapter.extraHours,
-      hourLogs: newLogs
-    };
-    onUpdate(updated);
+      completedHours:roundToMinute(Math.max(0,chapter.completedHours-log.hours)),
+      extraHours:log.type==="extra"?roundToMinute(Math.max(0,(chapter.extraHours||0)-log.hours)):chapter.extraHours,
+      hourLogs:logs.filter(l=>l.id!==logId)
+    });
   };
 
-  const saveEditLog = () => {
-    if (!editLog) return;
-    const oldLog = logs.find(l=>l.id===editLog.id);
-    if (!oldLog) return;
-    const newH = roundToMinute(parseHours(editLog.hours));
-    const diff = newH - oldLog.hours;
-    const newLogs = logs.map(l=>l.id===editLog.id?{...l,hours:newH,date:editLog.date,note:editLog.note}:l);
-    const updated = {
+  const saveEditLog=()=>{
+    if(!editLog) return;
+    const old=logs.find(l=>l.id===editLog.id);
+    if(!old) return;
+    const newH=roundToMinute(parseHours(editLog.hours));
+    const diff=newH-old.hours;
+    onUpdate({
       ...chapter,
-      completedHours: roundToMinute(Math.max(0, chapter.completedHours + diff)),
-      extraHours: oldLog.type==="extra" ? roundToMinute(Math.max(0,(chapter.extraHours||0)+diff)) : chapter.extraHours,
-      hourLogs: newLogs
-    };
-    onUpdate(updated);
+      completedHours:roundToMinute(Math.max(0,chapter.completedHours+diff)),
+      extraHours:old.type==="extra"?roundToMinute(Math.max(0,(chapter.extraHours||0)+diff)):chapter.extraHours,
+      hourLogs:logs.map(l=>l.id===editLog.id?{...l,hours:newH,date:editLog.date,note:editLog.note}:l)
+    });
     setEditLog(null);
   };
 
-  const toggleTopic=id=>{ const topics=(chapter.topics||[]).map(t=>t.id===id?{...t,done:!t.done}:t); onUpdate({...chapter,topics}); };
+  const toggleTopic=id=>onUpdate({...chapter,topics:(chapter.topics||[]).map(t=>t.id===id?{...t,done:!t.done}:t)});
   const markLast=id=>onUpdate({...chapter,lastCompletedTopic:chapter.lastCompletedTopic===id?null:id});
   const deleteTopic=id=>onUpdate({...chapter,topics:(chapter.topics||[]).filter(t=>t.id!==id)});
-  const addTopic=()=>{ if(!newTopic.trim())return; onUpdate({...chapter,topics:[...(chapter.topics||[]),{id:uid(),name:newTopic.trim(),done:false}]}); setNewTopic(""); };
-  const handleNotes=v=>{ setNotes(v); clearTimeout(ntRef.current); ntRef.current=setTimeout(()=>onUpdate({...chapter,notes:v}),800); };
+  const addTopic=()=>{if(!newTopic.trim())return;onUpdate({...chapter,topics:[...(chapter.topics||[]),{id:uid(),name:newTopic.trim(),done:false}]});setNewTopic("");};
+  const handleNotes=v=>{setNotes(v);clearTimeout(ntRef.current);ntRef.current=setTimeout(()=>onUpdate({...chapter,notes:v}),800);};
 
-  return (
-    <div style={{ minHeight:"100vh",background:"#f8fafc" }}>
-      <div style={{ background:`linear-gradient(135deg,${color},${color}bb)`,padding:"24px 20px 28px",color:"#fff",position:"relative",overflow:"hidden" }}>
-        <div style={{ position:"absolute",right:-30,top:-30,width:140,height:140,background:"rgba(255,255,255,.07)",borderRadius:"50%" }} />
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
-          <button onClick={onBack} style={{ background:"rgba(255,255,255,.2)",border:"none",borderRadius:10,padding:"7px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13 }}>← Back</button>
-          <SyncBadge status={syncStatus} />
+  const Sec=({title,children})=>(
+    <div style={{background:"#fff",borderRadius:20,padding:20,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,.06)"}}>
+      <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:14}}>{title}</div>
+      {children}
+    </div>
+  );
+
+  return(
+    <div style={{minHeight:"100vh",background:"#f8fafc"}}>
+      <div style={{background:`linear-gradient(135deg,${color},${color}bb)`,padding:"24px 20px 28px",color:"#fff",position:"relative",overflow:"hidden",borderRadius:"0 0 24px 24px"}}>
+        <div style={{position:"absolute",right:-30,top:-30,width:140,height:140,background:"rgba(255,255,255,.07)",borderRadius:"50%"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <button onClick={onBack} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:12,padding:"8px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>← Back</button>
+          <SyncBadge status={syncStatus}/>
         </div>
-        <div style={{ fontSize:40,fontWeight:900,letterSpacing:"-1px",lineHeight:1 }}>{chapter.batchCode}</div>
-        <div style={{ fontSize:20,fontWeight:700,marginTop:4,marginBottom:16 }}>{chapter.name}</div>
-        <div style={{ display:"flex",gap:10 }}>
-          {[{label:"Allotted",val:fmtHours(chapter.totalHours)},{label:"Taken",val:fmtHours(chapter.completedHours)},{label:"Extra",val:fmtHours(chapter.extraHours||0)},{label:"Left",val:fmtHours(remaining)}].map(s=>(
-            <div key={s.label} style={{ flex:1,background:"rgba(255,255,255,.2)",borderRadius:12,padding:"10px 4px",textAlign:"center" }}>
-              <div style={{ fontSize:14,fontWeight:800 }}>{s.val}</div>
-              <div style={{ fontSize:9,opacity:.8,fontWeight:600,marginTop:2 }}>{s.label}</div>
+        <div style={{fontSize:38,fontWeight:900,letterSpacing:"-1px"}}>{chapter.batchCode}</div>
+        <div style={{fontSize:20,fontWeight:700,marginTop:4,marginBottom:18,lineHeight:1.3}}>{chapter.name}</div>
+        <div style={{display:"flex",gap:10,marginBottom:14}}>
+          {[{l:"Allotted",v:fmtHours(chapter.totalHours)},{l:"Taken",v:fmtHours(chapter.completedHours)},{l:"Extra",v:fmtHours(chapter.extraHours||0)},{l:"Left",v:fmtHours(remaining)}].map(s=>(
+            <div key={s.l} style={{flex:1,background:"rgba(255,255,255,.2)",borderRadius:12,padding:"10px 4px",textAlign:"center"}}>
+              <div style={{fontSize:14,fontWeight:800}}>{s.v}</div>
+              <div style={{fontSize:9,opacity:.8,fontWeight:600,marginTop:2}}>{s.l}</div>
             </div>
           ))}
         </div>
-        <div style={{ marginTop:14 }}>
-          <PBar pct={pct} />
-          <div style={{ display:"flex",justifyContent:"space-between",marginTop:5,fontSize:13,fontWeight:700,opacity:.9 }}>
-            <span>{pct.toFixed(0)}% complete</span><span>{STATUS[status].label}</span>
-          </div>
+        <PBar pct={pct}/>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,opacity:.9,fontWeight:600}}>
+          <span>{pct.toFixed(0)}% complete</span><span>{STATUS[status].label}</span>
         </div>
-        {status==="exceeded"&&(
-          <div style={{ marginTop:10,background:"rgba(239,68,68,.3)",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700 }}>
-            ⚠️ Exceeded by {fmtHours(chapter.completedHours-chapter.totalHours)}
-          </div>
-        )}
+        {status==="exceeded"&&<div style={{marginTop:10,background:"rgba(239,68,68,.3)",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700}}>⚠️ Exceeded by {fmtHours(chapter.completedHours-chapter.totalHours)}</div>}
       </div>
 
-      <div style={{ padding:"20px 16px 60px",maxWidth:560,margin:"0 auto" }}>
-
-        {/* Log Hours */}
-        <Section title="📅 Log Class Hours">
-          <div style={{ marginBottom:10 }}>
-            <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:5 }}>Hours (e.g. 1.5 = 1h 30m)</label>
-            <div style={{ display:"flex",gap:8,marginBottom:8 }}>
-              <div style={{ flex:1 }}>
-                <input type="number" min={0} step={0.0833} value={logH} onChange={e=>setLogH(e.target.value)}
-                  onKeyDown={e=>e.key==="Enter"&&logHours()} placeholder="e.g. 1.25"
-                  style={{ width:"100%",padding:"11px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box" }} />
-                {logH && <div style={{ fontSize:11,color:"#6366f1",marginTop:3,fontWeight:600 }}>= {fmtHours(parseHours(logH))}</div>}
+      <div style={{padding:"20px 16px 80px",maxWidth:560,margin:"0 auto"}}>
+        <Sec title="📅 Log Class Hours">
+          <div style={{marginBottom:12}}>
+            <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Hours (decimal · e.g. 1.25 = 1h 15m)</label>
+            <div style={{display:"flex",gap:8,marginBottom:6}}>
+              <div style={{flex:1}}>
+                <input type="number" min={0} step={0.0833} value={logH} onChange={e=>setLogH(e.target.value)} onKeyDown={e=>e.key==="Enter"&&logHours()} placeholder="e.g. 1.5"
+                  style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
+                {logH&&<div style={{fontSize:11,color:color,marginTop:3,fontWeight:700}}>= {fmtHours(parseHours(logH))}</div>}
               </div>
-              <button onClick={logHours} style={{ background:color,color:"#fff",border:"none",borderRadius:12,padding:"0 20px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:15 }}>+ Log</button>
+              <button onClick={logHours} style={{background:`linear-gradient(135deg,${color},${color}bb)`,color:"#fff",border:"none",borderRadius:12,padding:"0 22px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:15,boxShadow:`0 4px 14px ${color}44`}}>+ Log</button>
             </div>
-          </div>
-          <div style={{ display:"flex",gap:8,marginBottom:8 }}>
-            <div style={{ flex:1 }}>
-              <label style={{ display:"block",fontSize:12,fontWeight:600,color:"#475569",marginBottom:4 }}>📅 Date</label>
-              <input type="date" value={logDate} onChange={e=>setLogDate(e.target.value)}
-                style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box" }} />
-            </div>
-            <div style={{ flex:1 }}>
-              <label style={{ display:"block",fontSize:12,fontWeight:600,color:"#475569",marginBottom:4 }}>📝 Period/Note</label>
-              <input type="text" value={logNote} onChange={e=>setLogNote(e.target.value)} placeholder="e.g. Period 3"
-                style={{ width:"100%",padding:"9px 12px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box" }} />
-            </div>
-          </div>
-
-          {/* Extra Hours */}
-          <div style={{ background:"#fffbeb",border:"1.5px solid #fde68a",borderRadius:12,padding:"14px 16px",marginTop:4 }}>
-            <div style={{ fontSize:13,fontWeight:700,color:"#92400e",marginBottom:8 }}>➕ Extra Hours (Beyond Allotted)</div>
-            <div style={{ display:"flex",gap:8,marginBottom:4 }}>
-              <div style={{ flex:1 }}>
-                <input type="number" min={0} step={0.0833} value={extraH} onChange={e=>setExtraH(e.target.value)}
-                  onKeyDown={e=>e.key==="Enter"&&logExtra()} placeholder="e.g. 0.5"
-                  style={{ width:"100%",padding:"10px 14px",border:"1.5px solid #fde68a",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fffef5",boxSizing:"border-box" }} />
-                {extraH && <div style={{ fontSize:11,color:"#92400e",marginTop:3,fontWeight:600 }}>= {fmtHours(parseHours(extraH))}</div>}
+            <div style={{display:"flex",gap:8,marginBottom:6}}>
+              <div style={{flex:1}}>
+                <label style={{display:"block",fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4}}>📅 Date</label>
+                <input type="date" value={logDate} onChange={e=>setLogDate(e.target.value)}
+                  style={{width:"100%",padding:"10px 12px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
               </div>
-              <button onClick={logExtra} style={{ background:"#f59e0b",color:"#fff",border:"none",borderRadius:12,padding:"0 18px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14 }}>+ Add</button>
+              <div style={{flex:1}}>
+                <label style={{display:"block",fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4}}>📝 Period/Note</label>
+                <input type="text" value={logNote} onChange={e=>setLogNote(e.target.value)} placeholder="e.g. Period 3"
+                  style={{width:"100%",padding:"10px 12px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
+              </div>
             </div>
           </div>
-        </Section>
+          <div style={{background:"linear-gradient(135deg,#fffbeb,#fef9c3)",border:"2px solid #fde68a",borderRadius:14,padding:"16px"}}>
+            <div style={{fontSize:13,fontWeight:800,color:"#92400e",marginBottom:10}}>⭐ Extra Hours (Beyond Allotted)</div>
+            <div style={{display:"flex",gap:8"}}>
+              <div style={{flex:1}}>
+                <input type="number" min={0} step={0.0833} value={extraH} onChange={e=>setExtraH(e.target.value)} onKeyDown={e=>e.key==="Enter"&&logExtra()} placeholder="e.g. 0.5"
+                  style={{width:"100%",padding:"11px 14px",border:"2px solid #fde68a",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fffef5",boxSizing:"border-box"}}/>
+                {extraH&&<div style={{fontSize:11,color:"#92400e",marginTop:3,fontWeight:700}}>= {fmtHours(parseHours(extraH))}</div>}
+              </div>
+              <button onClick={logExtra} style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",border:"none",borderRadius:12,padding:"0 20px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:14,boxShadow:"0 4px 14px rgba(245,158,11,.3)"}}>+ Add</button>
+            </div>
+          </div>
+        </Sec>
 
-        {/* Hour Logs History */}
-        {logs.length > 0 && (
-          <Section title={`🕐 Hour Log History (${logs.length} entries)`}>
-            <button onClick={()=>setShowLogs(!showLogs)} style={{ background:"#eef2ff",color:"#6366f1",border:"none",borderRadius:10,padding:"8px 16px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,marginBottom:showLogs?12:0 }}>
+        {logs.length>0&&(
+          <Sec title={`🕐 Hour Logs (${logs.length} entries)`}>
+            <button onClick={()=>setShowLogs(!showLogs)} style={{background:"#eef2ff",color:"#6366f1",border:"none",borderRadius:10,padding:"8px 16px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,marginBottom:showLogs?12:0}}>
               {showLogs?"Hide Logs ▲":"Show All Logs ▼"}
             </button>
-            {showLogs && (
-              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {showLogs&&(
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:showLogs?8:0}}>
                 {[...logs].reverse().map(log=>(
-                  <div key={log.id} style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:12,background:log.type==="extra"?"#fffbeb":"#f8fafc",border:`1.5px solid ${log.type==="extra"?"#fde68a":"#e2e8f0"}` }}>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:14,fontWeight:800,color:log.type==="extra"?"#92400e":color }}>{fmtHours(log.hours)} {log.type==="extra"?"⭐ Extra":""}</div>
-                      <div style={{ fontSize:12,color:"#64748b",marginTop:2 }}>📅 {fmtDate(log.date)}{log.note?" · "+log.note:""}</div>
+                  <div key={log.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,background:log.type==="extra"?"linear-gradient(135deg,#fffbeb,#fef9c3)":"#f8fafc",border:`2px solid ${log.type==="extra"?"#fde68a":"#e2e8f0"}`}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:14,fontWeight:800,color:log.type==="extra"?"#92400e":color}}>
+                        {fmtHours(log.hours)} {log.type==="extra"?"⭐ Extra":"🕐 Regular"}
+                      </div>
+                      <div style={{fontSize:12,color:"#64748b",marginTop:2}}>📅 {fmtDate(log.date)}{log.note?" · "+log.note:""}</div>
                     </div>
-                    <button onClick={()=>setEditLog({...log,hours:String(log.hours)})} style={{ background:"#eef2ff",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center" }}>✏️</button>
-                    <button onClick={()=>deleteLog(log.id)} style={{ background:"#fee2e2",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",fontSize:12,color:"#ef4444",display:"flex",alignItems:"center",justifyContent:"center" }}>🗑️</button>
+                    <button onClick={()=>setEditLog({...log,hours:String(log.hours)})} style={{background:"#eef2ff",border:"none",borderRadius:9,width:30,height:30,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✏️</button>
+                    <button onClick={()=>deleteLog(log.id)} style={{background:"#fee2e2",border:"none",borderRadius:9,width:30,height:30,cursor:"pointer",fontSize:13,color:"#ef4444",display:"flex",alignItems:"center",justifyContent:"center"}}>🗑️</button>
                   </div>
                 ))}
               </div>
             )}
-          </Section>
+          </Sec>
         )}
 
-        {/* Edit Log Modal */}
-        {editLog && (
+        {editLog&&(
           <Modal title="✏️ Edit Log Entry" onClose={()=>setEditLog(null)}>
-            <div style={{ marginBottom:12 }}>
-              <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:5 }}>Hours</label>
+            <div style={{marginBottom:12}}>
+              <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Hours</label>
               <input type="number" value={editLog.hours} onChange={e=>setEditLog({...editLog,hours:e.target.value})} step={0.0833}
-                style={{ width:"100%",padding:"11px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box" }} />
-              {editLog.hours && <div style={{ fontSize:12,color:"#6366f1",marginTop:3,fontWeight:600 }}>= {fmtHours(parseHours(editLog.hours))}</div>}
+                style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
+              {editLog.hours&&<div style={{fontSize:12,color:"#6366f1",marginTop:3,fontWeight:700}}>= {fmtHours(parseHours(editLog.hours))}</div>}
             </div>
-            <div style={{ marginBottom:12 }}>
-              <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:5 }}>Date</label>
+            <div style={{marginBottom:12}}>
+              <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Date</label>
               <input type="date" value={editLog.date} onChange={e=>setEditLog({...editLog,date:e.target.value})}
-                style={{ width:"100%",padding:"11px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box" }} />
+                style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
             </div>
-            <div style={{ marginBottom:16 }}>
-              <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#475569",marginBottom:5 }}>Note / Period</label>
+            <div style={{marginBottom:18}}>
+              <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Note / Period</label>
               <input type="text" value={editLog.note} onChange={e=>setEditLog({...editLog,note:e.target.value})}
-                style={{ width:"100%",padding:"11px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box" }} />
+                style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
             </div>
-            <div style={{ display:"flex",gap:10,justifyContent:"flex-end" }}>
-              <button onClick={()=>setEditLog(null)} style={{ background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>Cancel</button>
-              <button onClick={saveEditLog} style={{ background:color,color:"#fff",border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,cursor:"pointer",fontFamily:"inherit" }}>Save Changes</button>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button onClick={()=>setEditLog(null)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
+              <button onClick={saveEditLog} style={{background:`linear-gradient(135deg,${color},${color}bb)`,color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Save Changes</button>
             </div>
           </Modal>
         )}
 
-        {/* Topics */}
-        <Section title="📋 Topics">
-          <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:12 }}>
-            {(chapter.topics||[]).length===0&&<div style={{ textAlign:"center",padding:"16px",color:"#94a3b8",fontSize:14 }}>No topics yet.</div>}
+        <Sec title="📋 Topics">
+          {(chapter.topics||[]).length===0&&<div style={{textAlign:"center",padding:"16px",color:"#94a3b8",fontSize:14}}>No topics yet.</div>}
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
             {(chapter.topics||[]).map((t,i)=>{
               const isLast=chapter.lastCompletedTopic===t.id;
-              return (
-                <div key={t.id} style={{ display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderRadius:12,background:isLast?"#eef2ff":t.done?"#f0fdf4":"#fff",border:`1.5px solid ${isLast?"#c7d2fe":t.done?"#bbf7d0":"#e2e8f0"}` }}>
-                  <input type="checkbox" checked={t.done} onChange={()=>toggleTopic(t.id)} style={{ width:17,height:17,accentColor:color,cursor:"pointer",flexShrink:0 }} />
-                  <span style={{ flex:1,fontSize:14,color:t.done?"#64748b":"#1e293b",textDecoration:t.done?"line-through":"none" }}>{i+1}. {t.name}</span>
-                  {isLast&&<span style={{ background:color,color:"#fff",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,flexShrink:0 }}>Last Done</span>}
-                  <button onClick={()=>markLast(t.id)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:15,opacity:.5,padding:0,flexShrink:0 }}>📍</button>
-                  <button onClick={()=>deleteTopic(t.id)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:16,color:"#ef4444",opacity:.5,padding:0,flexShrink:0 }}>×</button>
+              return(
+                <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,background:isLast?"#eef2ff":t.done?"#f0fdf4":"#fff",border:`2px solid ${isLast?"#c7d2fe":t.done?"#bbf7d0":"#e2e8f0"}`}}>
+                  <input type="checkbox" checked={t.done} onChange={()=>toggleTopic(t.id)} style={{width:18,height:18,accentColor:color,cursor:"pointer",flexShrink:0}}/>
+                  <span style={{flex:1,fontSize:14,color:t.done?"#64748b":"#1e293b",textDecoration:t.done?"line-through":"none",fontWeight:t.done?500:600}}>{i+1}. {t.name}</span>
+                  {isLast&&<span style={{background:color,color:"#fff",fontSize:10,fontWeight:700,padding:"2px 10px",borderRadius:99,flexShrink:0}}>Last Done</span>}
+                  <button onClick={()=>markLast(t.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,opacity:.5,padding:0,flexShrink:0}}>📍</button>
+                  <button onClick={()=>deleteTopic(t.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:17,color:"#ef4444",opacity:.5,padding:0,flexShrink:0}}>×</button>
                 </div>
               );
             })}
           </div>
-          <div style={{ display:"flex",gap:8 }}>
+          <div style={{display:"flex",gap:8}}>
             <input value={newTopic} onChange={e=>setNewTopic(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addTopic();}} placeholder="Add a topic..."
-              style={{ flex:1,padding:"10px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff" }} />
-            <button onClick={addTopic} style={{ background:color,color:"#fff",border:"none",borderRadius:12,padding:"0 18px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14 }}>+ Add</button>
+              style={{flex:1,padding:"11px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff"}}/>
+            <button onClick={addTopic} style={{background:`linear-gradient(135deg,${color},${color}bb)`,color:"#fff",border:"none",borderRadius:12,padding:"0 18px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>+ Add</button>
           </div>
-        </Section>
+        </Sec>
 
-        {/* Notes */}
-        <Section title="📝 Notes">
+        <Sec title="📝 Notes">
           <textarea value={notes} onChange={e=>handleNotes(e.target.value)} placeholder="Notes, derivations, student doubts..."
-            style={{ width:"100%",minHeight:120,padding:"14px",border:"1.5px solid #e2e8f0",borderRadius:14,fontSize:14,fontFamily:"inherit",resize:"vertical",outline:"none",background:"#fff",lineHeight:1.7,boxSizing:"border-box" }} />
-          <div style={{ fontSize:11,color:"#94a3b8",marginTop:4 }}>☁️ Auto-saved to cloud</div>
-        </Section>
+            style={{width:"100%",minHeight:120,padding:"14px",border:"2px solid #e2e8f0",borderRadius:14,fontSize:14,fontFamily:"inherit",resize:"vertical",outline:"none",background:"#fff",lineHeight:1.8,boxSizing:"border-box"}}/>
+          <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>☁️ Auto-saved to cloud</div>
+        </Sec>
       </div>
     </div>
   );
 }
 
-// ── Dashboard ─────────────────────────────────────────────────────
-function DashBar({ chapters, profile }) {
-  const total=chapters.reduce((s,c)=>s+c.totalHours,0);
-  const done=chapters.reduce((s,c)=>s+c.completedHours,0);
-  const pct=total>0?(done/total)*100:0;
-  const batches=[...new Set(chapters.map(c=>c.batchCode))];
-  const h=new Date().getHours();
-  const gw=h<12?"Good Morning ☀️":h<17?"Good Afternoon 🌤️":"Good Evening 🌙";
-  const sal=profile.gender==="male"?"Sir":"Ma'am";
-  return (
-    <div style={{ background:"linear-gradient(135deg,#6366f1,#4338ca)",borderRadius:20,padding:"20px 20px 22px",color:"#fff",marginBottom:22 }}>
-      <div style={{ fontSize:13,opacity:.8 }}>{gw},</div>
-      <div style={{ fontSize:22,fontWeight:900,marginBottom:2 }}>{profile.code} {sal} 👋</div>
-      <div style={{ fontSize:12,opacity:.6,marginBottom:6 }}>{profile.name}</div>
-      {profile.subject && (
-        <div style={{ display:"inline-block",background:"rgba(255,255,255,.2)",borderRadius:99,padding:"3px 12px",fontSize:12,fontWeight:700,marginBottom:10 }}>
-          {{"Physics":"⚡","Chemistry":"🧪","Biology":"🧬","Mathematics":"📐","Multiple Subjects":"📚"}[profile.subject]||"📖"} {profile.subject}
-        </div>
-      )}
-      {batches.length>0&&(
-        <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginBottom:14 }}>
-          {batches.map(b=><span key={b} style={{ background:"rgba(255,255,255,.2)",borderRadius:99,padding:"3px 12px",fontSize:12,fontWeight:700 }}>{b}</span>)}
-        </div>
-      )}
-      <div style={{ background:"rgba(255,255,255,.2)",borderRadius:99,height:7 }}>
-        <div style={{ width:`${Math.min(pct,100)}%`,height:"100%",background:"#fff",borderRadius:99,transition:"width .8s" }} />
-      </div>
-      <div style={{ fontSize:12,opacity:.8,marginTop:6 }}>{pct.toFixed(0)}% overall · {chapters.length} chapters · {batches.length} batches</div>
-    </div>
-  );
-}
-
-// ── Batch Card ────────────────────────────────────────────────────
-function BatchCard({ batchCode, color, chapters, onClick, onDeleteAll }) {
-  const total=chapters.reduce((s,c)=>s+c.totalHours,0);
-  const done=chapters.reduce((s,c)=>s+c.completedHours,0);
-  const pct=total>0?(done/total)*100:0;
-  return (
-    <div onClick={onClick} style={{ background:`linear-gradient(135deg,${color},${color}cc)`,borderRadius:18,padding:20,color:"#fff",cursor:"pointer",boxShadow:`0 4px 20px ${color}44`,position:"relative",overflow:"hidden",transition:"transform .2s" }}
-      onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"}
-      onMouseLeave={e=>e.currentTarget.style.transform="none"}
-    >
-      <div style={{ position:"absolute",right:-20,top:-20,width:100,height:100,background:"rgba(255,255,255,.08)",borderRadius:"50%" }} />
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8 }}>
-        <div style={{ fontSize:36,fontWeight:900 }}>{batchCode}</div>
-        <button onClick={e=>{e.stopPropagation();onDeleteAll();}} style={{ background:"rgba(239,68,68,.3)",border:"none",borderRadius:8,padding:"6px 12px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12 }}>🗑️ Delete</button>
-      </div>
-      <div style={{ fontSize:13,opacity:.8,marginBottom:12 }}>{chapters.length} chapters · Tap to manage</div>
-      <div style={{ display:"flex",gap:8,marginBottom:12 }}>
-        {[{l:"Allotted",v:fmtHours(total)},{l:"Done",v:fmtHours(done)},{l:"Left",v:fmtHours(Math.max(0,total-done))}].map(s=>(
-          <div key={s.l} style={{ flex:1,background:"rgba(255,255,255,.18)",borderRadius:10,padding:"7px 4px",textAlign:"center" }}>
-            <div style={{ fontSize:13,fontWeight:800 }}>{s.v}</div>
-            <div style={{ fontSize:9,opacity:.8,fontWeight:600,marginTop:1 }}>{s.l}</div>
-          </div>
-        ))}
-      </div>
-      <PBar pct={pct} />
-      <div style={{ fontSize:12,opacity:.8,marginTop:5 }}>{pct.toFixed(0)}% complete</div>
+// ── Bottom Nav ────────────────────────────────────────────────────
+function BottomNav({active,onChange}) {
+  const tabs=[
+    {id:"home",icon:"🏠",label:"Home"},
+    {id:"chapters",icon:"📚",label:"Chapters"},
+    {id:"batches",icon:"🗂️",label:"Batches"},
+    {id:"profile",icon:"👤",label:"Profile"},
+  ];
+  return(
+    <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"1px solid #f1f5f9",display:"flex",zIndex:100,boxShadow:"0 -4px 24px rgba(0,0,0,.08)"}}>
+      {tabs.map(t=>{
+        const isActive=active===t.id;
+        return(
+          <button key={t.id} onClick={()=>onChange(t.id)} style={{flex:1,padding:"10px 0 8px",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+            <div style={{fontSize:22,transition:"transform .2s",transform:isActive?"scale(1.2)":"scale(1)"}}>{t.icon}</div>
+            <div style={{fontSize:10,fontWeight:isActive?800:600,color:isActive?"#6366f1":"#94a3b8",transition:"color .2s"}}>{t.label}</div>
+            {isActive&&<div style={{width:20,height:3,background:"#6366f1",borderRadius:99,marginTop:1}}/>}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 // ── Main App ──────────────────────────────────────────────────────
 export default function App() {
-  const [profile,setProfile] = useState(()=>{
-    try { const s=localStorage.getItem("lt_session"); return s?JSON.parse(s):null; } catch { return null; }
+  const [splashDone,setSplashDone]=useState(false);
+  const [profile,setProfile]=useState(()=>{
+    try{const s=localStorage.getItem("lt_session");return s?JSON.parse(s):null;}catch{return null;}
   });
-  const [chapters,setChapters] = useState([]);
-  const [loading,setLoading] = useState(false);
-  const [syncStatus,setSyncStatus] = useState(null);
-  const [addOpen,setAddOpen] = useState(false);
-  const [editChapter,setEditChapter] = useState(null);
-  const [detailId,setDetailId] = useState(null);
-  const [batchView,setBatchView] = useState(null); // batchCode string
-  const [exportOpen,setExportOpen] = useState(false);
-  const [search,setSearch] = useState("");
-  const [viewMode,setViewMode] = useState("chapters"); // "chapters" | "batches"
-  const [showCongrats,setShowCongrats] = useState(false);
-  const congratsShown = useRef(false);
+  const [chapters,setChapters]=useState([]);
+  const [loading,setLoading]=useState(false);
+  const [syncStatus,setSyncStatus]=useState(null);
+  const [tab,setTab]=useState("home");
+  const [addOpen,setAddOpen]=useState(false);
+  const [editChapter,setEditChapter]=useState(null);
+  const [detailId,setDetailId]=useState(null);
+  const [batchView,setBatchView]=useState(null);
+  const congratsShown=useRef(false);
+  const [showCongrats,setShowCongrats]=useState(false);
+
+  // Splash screen — show 2 seconds
+  useEffect(()=>{ const t=setTimeout(()=>setSplashDone(true),2200); return()=>clearTimeout(t); },[]);
 
   useEffect(()=>{
-    if (!profile) return;
+    if(!profile) return;
     setLoading(true);
     supabase.from("chapters").select("*").eq("teacher_code",profile.code).order("created_at")
-      .then(({ data, error }) => {
-        if (!error && data) {
-          const chs = data.map(fromRow);
+      .then(({data,error})=>{
+        if(!error&&data){
+          const chs=data.map(fromRow);
           setChapters(chs);
-          // Check for 100h milestone
-          if (!congratsShown.current) {
-            const totalDone = chs.reduce((s,c)=>s+c.completedHours,0);
-            if (totalDone >= 100) { setShowCongrats(true); congratsShown.current = true; }
+          if(!congratsShown.current){
+            const td=chs.reduce((s,c)=>s+c.completedHours,0);
+            if(td>=100){setShowCongrats(true);congratsShown.current=true;}
           }
         }
         setLoading(false);
       });
-  }, [profile]);
+  },[profile]);
 
-  const syncChapter = useCallback(async (chapter) => {
-    if (!profile) return;
+  const syncChapter=useCallback(async chapter=>{
+    if(!profile) return;
     setSyncStatus("saving");
-    const { error } = await supabase.from("chapters").upsert(toRow(profile.code, chapter), { onConflict:"id" });
+    const{error}=await supabase.from("chapters").upsert(toRow(profile.code,chapter),{onConflict:"id"});
     setSyncStatus(error?"error":"saved");
-    setTimeout(()=>setSyncStatus(null), 2500);
-  }, [profile]);
+    setTimeout(()=>setSyncStatus(null),2500);
+  },[profile]);
 
-  const updateChapter = useCallback(updated => {
-    setChapters(prev => {
-      const newChs = prev.map(c=>c.id===updated.id?updated:c);
-      // Check milestone
-      if (!congratsShown.current) {
-        const totalDone = newChs.reduce((s,c)=>s+c.completedHours,0);
-        if (totalDone >= 100) { setShowCongrats(true); congratsShown.current = true; }
+  const updateChapter=useCallback(updated=>{
+    setChapters(prev=>{
+      const next=prev.map(c=>c.id===updated.id?updated:c);
+      if(!congratsShown.current){
+        const td=next.reduce((s,c)=>s+c.completedHours,0);
+        if(td>=100){setShowCongrats(true);congratsShown.current=true;}
       }
-      return newChs;
+      return next;
     });
     syncChapter(updated);
-  }, [syncChapter]);
+  },[syncChapter]);
 
-  const addChapter = async (data) => {
-    const chapter = { id:uid(), ...data, completedHours:0, extraHours:0, topics:[], notes:"", lastCompletedTopic:null, hourLogs:[] };
+  const addChapter=async data=>{
+    const chapter={id:uid(),...data,completedHours:0,extraHours:0,topics:[],notes:"",lastCompletedTopic:null,hourLogs:[]};
     setChapters(prev=>[...prev,chapter]);
     setSyncStatus("saving");
-    const { error } = await supabase.from("chapters").insert(toRow(profile.code, chapter));
+    const{error}=await supabase.from("chapters").insert(toRow(profile.code,chapter));
     setSyncStatus(error?"error":"saved");
     setTimeout(()=>setSyncStatus(null),2500);
     setAddOpen(false);
   };
 
-  const deleteChapter = async (id, silent=false) => {
-    if (!silent && !window.confirm("Delete this chapter? Cannot be undone.")) return;
+  const deleteChapter=async(id,silent=false)=>{
+    if(!silent&&!window.confirm("Delete this chapter?")) return;
     setChapters(prev=>prev.filter(c=>c.id!==id));
     await supabase.from("chapters").delete().eq("id",id);
   };
 
-  const deleteAllInBatch = async (batchCode) => {
-    if (!window.confirm(`Delete ALL chapters in batch ${batchCode}? Cannot be undone!`)) return;
-    const toDelete = chapters.filter(c=>c.batchCode===batchCode);
+  const deleteBatch=async batchCode=>{
+    if(!window.confirm(`Delete ALL chapters in ${batchCode}? Cannot be undone!`)) return;
+    const toDelete=chapters.filter(c=>c.batchCode===batchCode);
     setChapters(prev=>prev.filter(c=>c.batchCode!==batchCode));
-    for (const c of toDelete) await supabase.from("chapters").delete().eq("id",c.id);
+    for(const c of toDelete) await supabase.from("chapters").delete().eq("id",c.id);
     setBatchView(null);
   };
 
-  const editAndSave = async (data) => {
-    const updated = { ...editChapter, ...data };
+  const editAndSave=async data=>{
+    const updated={...editChapter,...data};
     setChapters(prev=>prev.map(c=>c.id===updated.id?updated:c));
-    await supabase.from("chapters").upsert(toRow(profile.code, updated), { onConflict:"id" });
+    await supabase.from("chapters").upsert(toRow(profile.code,updated),{onConflict:"id"});
     setEditChapter(null);
   };
 
-  const logout = () => { localStorage.removeItem("lt_session"); setProfile(null); setChapters([]); };
+  const logout=()=>{localStorage.removeItem("lt_session");setProfile(null);setChapters([]);};
 
-  if (!profile) return <Onboarding onDone={p=>setProfile(p)} />;
+  // ── Render ────────────────────────────────────────────────────
+  if(!splashDone) return <SplashScreen/>;
+  if(!profile) return <Onboarding onDone={p=>setProfile(p)}/>;
+  if(showCongrats){
+    const td=chapters.reduce((s,c)=>s+c.completedHours,0);
+    return <CongratsScreen profile={profile} totalHours={td} onClose={()=>setShowCongrats(false)}/>;
+  }
 
   const batches=[...new Set(chapters.map(c=>c.batchCode))].sort();
   const getBatchColor=b=>BATCH_COLORS[batches.indexOf(b)%BATCH_COLORS.length];
-  const totalDone = chapters.reduce((s,c)=>s+c.completedHours,0);
 
-  // Congrats screen
-  if (showCongrats) return <CongratsScreen profile={profile} totalHours={totalDone} onClose={()=>setShowCongrats(false)} />;
-
-  // Detail page
+  // Detail page (full screen)
   const detailChapter=chapters.find(c=>c.id===detailId);
-  if (detailChapter) return (
-    <DetailPage chapter={detailChapter} color={getBatchColor(detailChapter.batchCode)}
-      onUpdate={updateChapter} onBack={()=>setDetailId(null)} syncStatus={syncStatus} />
+  if(detailChapter) return(
+    <>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800;900&display=swap');*{box-sizing:border-box;}body{margin:0;font-family:'Sora',sans-serif;background:#f8fafc;}`}</style>
+      <DetailPage chapter={detailChapter} color={getBatchColor(detailChapter.batchCode)} onUpdate={updateChapter} onBack={()=>setDetailId(null)} syncStatus={syncStatus}/>
+    </>
   );
 
-  // Batch page
-  if (batchView) {
-    const batchChapters = chapters.filter(c=>c.batchCode===batchView);
-    return (
-      <BatchPage batchCode={batchView} color={getBatchColor(batchView)} chapters={batchChapters}
-        onBack={()=>setBatchView(null)}
-        onDeleteChapter={deleteChapter}
-        onEditChapter={c=>setEditChapter(c)}
-        onOpenChapter={id=>setDetailId(id)}
-      />
+  // Batch page (full screen)
+  if(batchView){
+    const bChs=chapters.filter(c=>c.batchCode===batchView);
+    return(
+      <>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800;900&display=swap');*{box-sizing:border-box;}body{margin:0;font-family:'Sora',sans-serif;background:#f8fafc;}`}</style>
+        <BatchPage batchCode={batchView} color={getBatchColor(batchView)} chapters={bChs}
+          onBack={()=>setBatchView(null)} onDeleteChapter={deleteChapter}
+          onEditChapter={c=>setEditChapter(c)} onOpenChapter={id=>setDetailId(id)}/>
+      </>
     );
   }
 
-  const filtered=chapters.filter(c=>c.name.toLowerCase().includes(search.toLowerCase())||c.batchCode.toLowerCase().includes(search.toLowerCase()));
-
-  return (
+  return(
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800;900&display=swap');
         *{box-sizing:border-box;} body{margin:0;font-family:'Sora',sans-serif;background:#f8fafc;}
-        ::-webkit-scrollbar{width:5px;} ::-webkit-scrollbar-thumb{background:#dde;border-radius:99px;}
+        ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:#dde;border-radius:99px;}
+        input:focus,textarea:focus{border-color:#6366f1!important;box-shadow:0 0 0 3px rgba(99,102,241,.1);}
       `}</style>
-      <div style={{ maxWidth:560,margin:"0 auto",padding:"22px 15px 70px" }}>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
-          <div>
-            <div style={{ fontSize:20,fontWeight:900,color:"#0f172a" }}>LectureTrack</div>
-            <div style={{ fontSize:11,color:"#94a3b8" }}>Physics · NEET / JEE</div>
-          </div>
-          <div style={{ display:"flex",gap:8,alignItems:"center" }}>
-            {syncStatus&&<SyncBadge status={syncStatus} />}
-            <button onClick={()=>setExportOpen(true)} style={{ background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center" }}>📊</button>
-            <button onClick={logout} title="Logout" style={{ background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center" }}>🔒</button>
-            <button onClick={()=>setAddOpen(true)} style={{ background:"#6366f1",color:"#fff",border:"none",borderRadius:10,padding:"0 14px",height:36,cursor:"pointer",fontSize:14,fontWeight:700,fontFamily:"inherit" }}>+ Add</button>
-          </div>
-        </div>
-
+      <div style={{maxWidth:560,margin:"0 auto",paddingBottom:72,minHeight:"100vh"}}>
         {loading?(
-          <div style={{ textAlign:"center",padding:"60px 20px" }}>
-            <div style={{ fontSize:40,marginBottom:16 }}>☁️</div>
-            <div style={{ fontWeight:700,fontSize:16,color:"#6366f1" }}>Loading your data...</div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"80vh"}}>
+            <div style={{fontSize:44,marginBottom:16}}>☁️</div>
+            <div style={{fontWeight:800,fontSize:16,color:"#6366f1"}}>Loading your data...</div>
+            <div style={{fontSize:13,color:"#94a3b8",marginTop:6}}>Fetching from cloud</div>
           </div>
         ):(
           <>
-            <DashBar chapters={chapters} profile={profile} />
-
-            {/* View Toggle */}
-            <div style={{ display:"flex",background:"#f1f5f9",borderRadius:12,padding:4,marginBottom:16,gap:4 }}>
-              {["chapters","batches"].map(m=>(
-                <button key={m} onClick={()=>setViewMode(m)} style={{ flex:1,padding:"8px",borderRadius:10,border:"none",cursor:"pointer",background:viewMode===m?"#fff":"transparent",fontWeight:700,fontSize:13,color:viewMode===m?"#6366f1":"#64748b",fontFamily:"inherit",boxShadow:viewMode===m?"0 2px 8px rgba(0,0,0,.08)":"none" }}>
-                  {m==="chapters"?"📚 Chapters":"🗂️ Batches"}
-                </button>
-              ))}
-            </div>
-
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search chapter or batch..."
-              style={{ width:"100%",padding:"11px 16px",border:"1.5px solid #e2e8f0",borderRadius:14,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",marginBottom:16,boxSizing:"border-box" }} />
-
-            {viewMode==="batches"?(
-              <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
-                {batches.length===0&&(
-                  <div style={{ textAlign:"center",padding:"50px 20px",color:"#94a3b8" }}>
-                    <div style={{ fontSize:44 }}>📭</div>
-                    <div style={{ fontWeight:700,marginTop:12,fontSize:16 }}>No batches yet</div>
-                    <div style={{ fontSize:13,marginTop:4 }}>Add a chapter to create a batch</div>
-                  </div>
-                )}
-                {batches.map(b=>(
-                  <BatchCard key={b} batchCode={b} color={getBatchColor(b)}
-                    chapters={chapters.filter(c=>c.batchCode===b)}
-                    onClick={()=>setBatchView(b)}
-                    onDeleteAll={()=>deleteAllInBatch(b)}
-                  />
-                ))}
-              </div>
-            ):(
-              <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
-                {filtered.length===0&&(
-                  <div style={{ textAlign:"center",padding:"50px 20px",color:"#94a3b8" }}>
-                    <div style={{ fontSize:44 }}>📭</div>
-                    <div style={{ fontWeight:700,marginTop:12,fontSize:16 }}>No chapters yet</div>
-                    <div style={{ fontSize:13,marginTop:4 }}>Tap "+ Add" to get started</div>
-                  </div>
-                )}
-                {filtered.map(c=>(
-                  <ChapterCard key={c.id} chapter={c} color={getBatchColor(c.batchCode)}
-                    onClick={()=>setDetailId(c.id)}
-                    onEdit={e=>{e.stopPropagation();setEditChapter(c);}}
-                    onDelete={e=>{e.stopPropagation();deleteChapter(c.id);}}
-                  />
-                ))}
-              </div>
-            )}
+            {tab==="home"&&<HomeTab chapters={chapters} profile={profile} onOpenChapter={id=>setDetailId(id)} onOpenBatch={b=>setBatchView(b)} syncStatus={syncStatus}/>}
+            {tab==="chapters"&&<ChaptersTab chapters={chapters} profile={profile} onOpenChapter={id=>setDetailId(id)} onAddChapter={()=>setAddOpen(true)} onEditChapter={c=>setEditChapter(c)} onDeleteChapter={deleteChapter} syncStatus={syncStatus}/>}
+            {tab==="batches"&&<BatchesTab chapters={chapters} onOpenBatch={b=>setBatchView(b)} onDeleteBatch={deleteBatch}/>}
+            {tab==="profile"&&<ProfileTab profile={profile} chapters={chapters} onLogout={logout} onUpdateProfile={p=>setProfile(p)}/>}
           </>
         )}
       </div>
-      {addOpen&&<ChapterFormModal onSave={addChapter} onClose={()=>setAddOpen(false)} />}
-      {editChapter&&<ChapterFormModal chapter={editChapter} onSave={editAndSave} onClose={()=>setEditChapter(null)} />}
-      {exportOpen&&<ExportModal chapters={chapters} onClose={()=>setExportOpen(false)} />}
+      <BottomNav active={tab} onChange={t=>{setTab(t);}}/>
+      {addOpen&&<ChapterFormModal onSave={addChapter} onClose={()=>setAddOpen(false)} subject={profile.subject}/>}
+      {editChapter&&<ChapterFormModal chapter={editChapter} onSave={editAndSave} onClose={()=>setEditChapter(null)} subject={profile.subject}/>}
     </>
   );
 }
