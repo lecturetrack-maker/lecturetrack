@@ -1,33 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#6366f1" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
-    <meta name="apple-mobile-web-app-title" content="LectureTrack" />
-    <meta
-      name="description"
-      content="Physics class hour tracker for NEET/JEE"
-    />
+    <meta charset="utf-8" />
+
+    <!-- ✅ Disable zoom — prevents accidental pinch zoom -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+    <!-- PWA / App icons -->
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="apple-touch-icon" href="/logo.svg" />
+    <link rel="shortcut icon" href="/logo.svg" />
+
+    <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" href="/icon-192.png" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
+
+    <!-- Theme color (browser chrome + PWA splash) -->
+    <meta name="theme-color" content="#4f46e5" />
+
+    <!-- iOS PWA settings -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="LectureTrack" />
+
+    <!-- Android PWA -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="LectureTrack" />
+
     <title>LectureTrack</title>
+
+    <style>
+      /* Prevent text size adjust on orientation change */
+      html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+      /* Prevent pull-to-refresh and overscroll on PWA */
+      body {
+        overscroll-behavior: none;
+        -webkit-overflow-scrolling: touch;
+        margin: 0;
+      }
+    </style>
   </head>
   <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-    <script>
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", () => {
-          navigator.serviceWorker.register("/sw.js");
-        });
-      }
-    </script>
   </body>
 </html>
