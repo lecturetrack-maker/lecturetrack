@@ -89,10 +89,14 @@ function buildCSV(chapters) {
   return rows.map(r=>r.map(v=>`"${v}"`).join(",")).join("\n");
 }
 
+const MASTER = "__MASTER__"; // sentinel for library chapters with no batch
+
 function toRow(teacherCode,c) {
   return {
-    id:c.id, teacher_code:teacherCode, batch_code:c.batchCode||null, name:c.name,
-    total_hours:c.totalHours||0, completed_hours:c.completedHours,
+    id:c.id, teacher_code:teacherCode,
+    batch_code: c.batchCode || MASTER,   // never null — avoids DB NOT NULL issue
+    name:c.name,
+    total_hours:c.totalHours||0, completed_hours:c.completedHours||0,
     extra_hours:c.extraHours||0, topics:c.topics||[],
     notes:c.notes||"", last_completed_topic:c.lastCompletedTopic||null,
     hour_logs:c.hourLogs||[], updated_at:new Date().toISOString()
@@ -100,9 +104,10 @@ function toRow(teacherCode,c) {
 }
 
 function fromRow(r) {
+  const batchCode = (!r.batch_code || r.batch_code === MASTER) ? null : r.batch_code;
   return {
-    id:r.id, batchCode:r.batch_code, name:r.name,
-    totalHours:r.total_hours||0, completedHours:r.completed_hours,
+    id:r.id, batchCode, name:r.name,
+    totalHours:r.total_hours||0, completedHours:r.completed_hours||0,
     extraHours:r.extra_hours||0, topics:r.topics||[],
     notes:r.notes||"", lastCompletedTopic:r.last_completed_topic,
     hourLogs:r.hour_logs||[]
@@ -695,9 +700,11 @@ function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
     reader.onload=ev=>{
       const photoData=ev.target.result;
       const updated={...profile,photo:photoData};
-      localStorage.setItem("lt_session",JSON.stringify(updated));
-      onUpdateProfile(updated);
+      // Save to Supabase (primary store for photo)
       supabase.from("teachers").update({photo:photoData}).eq("code",profile.code);
+      // Try localStorage but ignore quota errors — Supabase is the source of truth
+      try{localStorage.setItem("lt_session",JSON.stringify(updated));}catch(e){}
+      onUpdateProfile(updated);
     };
     reader.readAsDataURL(file);
   };
@@ -1093,9 +1100,66 @@ export default function App() {
 
   useEffect(()=>{const t=setTimeout(()=>setSplashDone(true),2200);return()=>clearTimeout(t);},[]);
 
+  // ── PWA icon injection ─────────────────────────────────────────
+  useEffect(()=>{
+    // Build an SVG icon for the PWA bookmark / home screen
+    const svgIcon=`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>
+      <rect width='512' height='512' rx='112' fill='%234f46e5'/>
+      <rect x='40' y='40' width='432' height='432' rx='80' fill='url(%23g)'/>
+      <defs>
+        <linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+          <stop offset='0%25' stop-color='%236366f1'/>
+          <stop offset='100%25' stop-color='%234338ca'/>
+        </linearGradient>
+      </defs>
+      <text x='256' y='340' font-family='Arial Black,sans-serif' font-size='260' font-weight='900'
+        fill='white' text-anchor='middle'>LT</text>
+    </svg>`;
+    const iconUrl=`data:image/svg+xml,${svgIcon}`;
+    // Inject apple-touch-icon and shortcut icon
+    ['apple-touch-icon','shortcut icon','icon'].forEach(rel=>{
+      let link=document.querySelector(`link[rel='${rel}']`);
+      if(!link){link=document.createElement('link');document.head.appendChild(link);}
+      link.rel=rel; link.href=iconUrl;
+    });
+    // Inject/update manifest
+    let mLink=document.querySelector("link[rel='manifest']");
+    if(!mLink){mLink=document.createElement('link');document.head.appendChild(mLink);}
+    const manifest={
+      name:'LectureTrack',short_name:'LectureTrack',
+      description:'Track every hour. Teach with clarity.',
+      start_url:'/',display:'standalone',
+      background_color:'#4f46e5',theme_color:'#4f46e5',
+      icons:[{src:iconUrl,sizes:'512x512',type:'image/svg+xml',purpose:'any maskable'}]
+    };
+    const mBlob=new Blob([JSON.stringify(manifest)],{type:'application/json'});
+    mLink.rel='manifest'; mLink.href=URL.createObjectURL(mBlob);
+    // Also set theme-color meta
+    let meta=document.querySelector("meta[name='theme-color']");
+    if(!meta){meta=document.createElement('meta');meta.name='theme-color';document.head.appendChild(meta);}
+    meta.content='#4f46e5';
+    // App name meta
+    let appMeta=document.querySelector("meta[name='apple-mobile-web-app-title']");
+    if(!appMeta){appMeta=document.createElement('meta');appMeta.name='apple-mobile-web-app-title';document.head.appendChild(appMeta);}
+    appMeta.content='LectureTrack';
+    let capMeta=document.querySelector("meta[name='apple-mobile-web-app-capable']");
+    if(!capMeta){capMeta=document.createElement('meta');capMeta.name='apple-mobile-web-app-capable';document.head.appendChild(capMeta);}
+    capMeta.content='yes';
+  },[]);
+
+  // On load: fetch profile (for photo) + chapters from Supabase
   useEffect(()=>{
     if(!profile) return;
     setLoading(true);
+    // Re-fetch teacher row to get latest photo (localStorage photo can be lost on quota exceed)
+    supabase.from("teachers").select("photo").eq("code",profile.code).single()
+      .then(({data})=>{
+        if(data?.photo && data.photo!==profile.photo){
+          const updated={...profile,photo:data.photo};
+          setProfile(updated);
+          try{localStorage.setItem("lt_session",JSON.stringify(updated));}catch{}
+        }
+      });
     supabase.from("chapters").select("*").eq("teacher_code",profile.code).order("created_at")
       .then(({data,error})=>{
         if(!error&&data){
@@ -1108,7 +1172,7 @@ export default function App() {
         }
         setLoading(false);
       });
-  },[profile]);
+  },[profile.code]);
 
   const syncChapter=useCallback(async chapter=>{
     if(!profile) return;
