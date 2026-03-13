@@ -2,44 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-
-    <!-- ✅ Disable zoom — prevents accidental pinch zoom -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
-    <!-- PWA / App icons -->
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <link rel="apple-touch-icon" href="/logo.svg" />
     <link rel="shortcut icon" href="/logo.svg" />
-
-    <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- Theme color (browser chrome + PWA splash) -->
     <meta name="theme-color" content="#4f46e5" />
-
-    <!-- iOS PWA settings -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="LectureTrack" />
-
-    <!-- Android PWA -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="application-name" content="LectureTrack" />
 
     <title>LectureTrack</title>
 
     <style>
-      /* Prevent text size adjust on orientation change */
-      html {
-        -webkit-text-size-adjust: 100%;
-        text-size-adjust: 100%;
-      }
-      /* Prevent pull-to-refresh and overscroll on PWA */
-      body {
-        overscroll-behavior: none;
-        -webkit-overflow-scrolling: touch;
-        margin: 0;
-      }
+      html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+      body { overscroll-behavior: none; -webkit-overflow-scrolling: touch; margin: 0; }
     </style>
   </head>
   <body>
