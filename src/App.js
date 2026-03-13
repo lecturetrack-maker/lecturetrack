@@ -756,7 +756,7 @@ function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
           </button>
         </div>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"#cbd5e1",paddingBottom:10}}>LectureTrack v11 · Made with ❤️ for teachers</div>
+      <div style={{textAlign:"center",fontSize:12,color:"#cbd5e1",paddingBottom:10}}>LectureTrack v12 · Made with ❤️ for teachers</div>
     </div>
   );
 }
@@ -1100,52 +1100,7 @@ export default function App() {
 
   useEffect(()=>{const t=setTimeout(()=>setSplashDone(true),2200);return()=>clearTimeout(t);},[]);
 
-  // ── PWA icon injection ─────────────────────────────────────────
-  useEffect(()=>{
-    // Build an SVG icon for the PWA bookmark / home screen
-    const svgIcon=`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>
-      <rect width='512' height='512' rx='112' fill='%234f46e5'/>
-      <rect x='40' y='40' width='432' height='432' rx='80' fill='url(%23g)'/>
-      <defs>
-        <linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
-          <stop offset='0%25' stop-color='%236366f1'/>
-          <stop offset='100%25' stop-color='%234338ca'/>
-        </linearGradient>
-      </defs>
-      <text x='256' y='340' font-family='Arial Black,sans-serif' font-size='260' font-weight='900'
-        fill='white' text-anchor='middle'>LT</text>
-    </svg>`;
-    const iconUrl=`data:image/svg+xml,${svgIcon}`;
-    // Inject apple-touch-icon and shortcut icon
-    ['apple-touch-icon','shortcut icon','icon'].forEach(rel=>{
-      let link=document.querySelector(`link[rel='${rel}']`);
-      if(!link){link=document.createElement('link');document.head.appendChild(link);}
-      link.rel=rel; link.href=iconUrl;
-    });
-    // Inject/update manifest
-    let mLink=document.querySelector("link[rel='manifest']");
-    if(!mLink){mLink=document.createElement('link');document.head.appendChild(mLink);}
-    const manifest={
-      name:'LectureTrack',short_name:'LectureTrack',
-      description:'Track every hour. Teach with clarity.',
-      start_url:'/',display:'standalone',
-      background_color:'#4f46e5',theme_color:'#4f46e5',
-      icons:[{src:iconUrl,sizes:'512x512',type:'image/svg+xml',purpose:'any maskable'}]
-    };
-    const mBlob=new Blob([JSON.stringify(manifest)],{type:'application/json'});
-    mLink.rel='manifest'; mLink.href=URL.createObjectURL(mBlob);
-    // Also set theme-color meta
-    let meta=document.querySelector("meta[name='theme-color']");
-    if(!meta){meta=document.createElement('meta');meta.name='theme-color';document.head.appendChild(meta);}
-    meta.content='#4f46e5';
-    // App name meta
-    let appMeta=document.querySelector("meta[name='apple-mobile-web-app-title']");
-    if(!appMeta){appMeta=document.createElement('meta');appMeta.name='apple-mobile-web-app-title';document.head.appendChild(appMeta);}
-    appMeta.content='LectureTrack';
-    let capMeta=document.querySelector("meta[name='apple-mobile-web-app-capable']");
-    if(!capMeta){capMeta=document.createElement('meta');capMeta.name='apple-mobile-web-app-capable';document.head.appendChild(capMeta);}
-    capMeta.content='yes';
-  },[]);
+
 
   // On load: fetch profile (for photo) + chapters from Supabase
   useEffect(()=>{
@@ -1273,9 +1228,12 @@ export default function App() {
 
   const STYLE=`
     @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800;900&display=swap');
-    *{box-sizing:border-box;} body{margin:0;font-family:'Sora',sans-serif;background:#f8fafc;}
+    *{box-sizing:border-box;} body{margin:0;font-family:'Sora',sans-serif;background:#f8fafc;overscroll-behavior:none;}
     ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:#dde;border-radius:99px;}
     input:focus,textarea:focus{border-color:#6366f1!important;box-shadow:0 0 0 3px rgba(99,102,241,.1);}
+    /* Prevent accidental zoom */
+    html{touch-action:pan-x pan-y;} * {touch-action:inherit;}
+    input,textarea,select{touch-action:manipulation;}
   `;
 
   if(!splashDone) return <><style>{STYLE}</style><SplashScreen/></>;
