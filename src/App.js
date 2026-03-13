@@ -1127,7 +1127,7 @@ export default function App() {
         }
         setLoading(false);
       });
-  },[profile.code]);
+  },[profile?.code]);
 
   const syncChapter=useCallback(async chapter=>{
     if(!profile) return;
@@ -1220,7 +1220,7 @@ export default function App() {
     setEditChapter(null);
   };
 
-  const logout=()=>{localStorage.removeItem("lt_session");setProfile(null);setChapters([]);};
+  const logout=()=>{localStorage.removeItem("lt_session");window.location.reload();};
 
   // Derived lists
   const masterChapters=chapters.filter(c=>!c.batchCode);  // chapter library
