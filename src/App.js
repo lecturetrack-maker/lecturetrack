@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -89,12 +89,12 @@ function buildCSV(chapters) {
   return rows.map(r=>r.map(v=>`"${v}"`).join(",")).join("\n");
 }
 
-const MASTER = "__MASTER__"; // sentinel for library chapters with no batch
+const MASTER = "__MASTER__";
 
 function toRow(teacherCode,c) {
   return {
     id:c.id, teacher_code:teacherCode,
-    batch_code: c.batchCode || MASTER,   // never null — avoids DB NOT NULL issue
+    batch_code: c.batchCode || MASTER,
     name:c.name,
     total_hours:c.totalHours||0, completed_hours:c.completedHours||0,
     extra_hours:c.extraHours||0, topics:c.topics||[],
@@ -114,7 +114,7 @@ function fromRow(r) {
   };
 }
 
-// ── Splash Screen (v9 original) ───────────────────────────────────
+// ── Splash Screen ─────────────────────────────────────────────────
 function SplashScreen() {
   return (
     <div style={{position:"fixed",inset:0,background:"linear-gradient(135deg,#4f46e5 0%,#7c3aed 50%,#6366f1 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:999}}>
@@ -199,7 +199,7 @@ function ChapterAutocomplete({value,onChange,subject}) {
   );
 }
 
-// ── Onboarding (v9 original) ──────────────────────────────────────
+// ── Onboarding ────────────────────────────────────────────────────
 function Onboarding({onDone}) {
   const [mode,setMode]=useState("login");
   const [name,setName]=useState("");
@@ -349,41 +349,146 @@ function PBar({pct,color="#fff",bg="rgba(255,255,255,.25)",height=8}) {
   );
 }
 
-// ── BATCH ADD MODAL (like v9 original — batch code + chapter + hours) ─
-// FIX #5: Batch add is self-contained: enter batch code, chapter name, hours
-// FIX #6: Topics auto-populate from the master chapter list
-function BatchFormModal({onSave,onClose,subject,masterChapters}) {
-  const [batchCode,setBatchCode]=useState("");
-  const [rows,setRows]=useState([{id:uid(),name:"",hours:""}]);
-
-  const addRow=()=>setRows(prev=>[...prev,{id:uid(),name:"",hours:""}]);
-  const removeRow=id=>setRows(prev=>prev.filter(r=>r.id!==id));
-  const updateRow=(id,field,val)=>setRows(prev=>prev.map(r=>r.id===id?{...r,[field]:val}:r));
-
-  // Autocomplete state per row
-  const [openRow,setOpenRow]=useState(null);
-  const [suggestions,setSuggestions]=useState([]);
-  const acRef=useRef();
+// ── FIX #6: BatchFormModal — isolated input state to prevent keyboard close ──
+// Each row uses a local ref-based approach + controlled state with stable callbacks
+function BatchRowInput({rowId, initialName, initialHours, onNameChange, onHoursChange, onRemove, showRemove, subject, masterChapters, index}) {
+  const [name, setName] = useState(initialName);
+  const [hours, setHours] = useState(initialHours);
+  const [open, setOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const acRef = useRef();
 
   useEffect(()=>{
-    const h=e=>{if(acRef.current&&!acRef.current.contains(e.target))setOpenRow(null);};
+    const h=e=>{if(acRef.current&&!acRef.current.contains(e.target))setOpen(false);};
     document.addEventListener("mousedown",h);
     return()=>document.removeEventListener("mousedown",h);
   },[]);
 
-  const handleChapterInput=(id,v)=>{
-    updateRow(id,"name",v);
-    if(v.length<1){setSuggestions([]);setOpenRow(null);return;}
+  const handleNameInput = useCallback((v) => {
+    setName(v);
+    onNameChange(rowId, v);
+    if(v.length<1){setSuggestions([]);setOpen(false);return;}
     const pool=subject&&subject!=="Multiple Subjects"&&CHAPTER_DB[subject]?CHAPTER_DB[subject]:ALL_CHAPTERS;
     const filtered=pool.filter(c=>c.toLowerCase().includes(v.toLowerCase())).slice(0,7);
     setSuggestions(filtered);
-    setOpenRow(filtered.length>0?id:null);
+    setOpen(filtered.length>0);
+  }, [rowId, onNameChange, subject]);
+
+  const handleHoursInput = useCallback((v) => {
+    setHours(v);
+    onHoursChange(rowId, v);
+  }, [rowId, onHoursChange]);
+
+  const selectSuggestion = useCallback((s) => {
+    setName(s);
+    onNameChange(rowId, s);
+    setOpen(false);
+  }, [rowId, onNameChange]);
+
+  // FIX #1 & #5: Show topics from master chapter when name matches
+  const master = useMemo(() =>
+    masterChapters.find(mc=>mc.name.toLowerCase()===name.toLowerCase()),
+    [masterChapters, name]
+  );
+  const topics = master?.topics || [];
+
+  return (
+    <div ref={acRef} style={{background:"#f8fafc",borderRadius:14,padding:"12px 14px",border:"1.5px solid #e2e8f0",position:"relative"}}>
+      <div style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:8}}>
+        <div style={{flex:1,position:"relative"}}>
+          <input
+            value={name}
+            onChange={e=>handleNameInput(e.target.value)}
+            placeholder={`Chapter ${index+1} name...`}
+            style={{width:"100%",padding:"10px 12px",border:"2px solid #e2e8f0",borderRadius:10,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}
+          />
+          {open&&suggestions.length>0&&(
+            <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",borderRadius:10,boxShadow:"0 8px 30px rgba(0,0,0,.13)",zIndex:250,maxHeight:200,overflowY:"auto",marginTop:3,border:"1.5px solid #e2e8f0"}}>
+              {suggestions.map((s,si)=>(
+                <div key={si} onMouseDown={()=>selectSuggestion(s)}
+                  style={{padding:"10px 14px",cursor:"pointer",fontSize:13,fontWeight:600,color:"#1e293b",borderBottom:"1px solid #f1f5f9"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#f0f4ff"}
+                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  📖 {s}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {showRemove&&(
+          <button onClick={()=>onRemove(rowId)} style={{background:"#fee2e2",border:"none",borderRadius:8,width:32,height:32,cursor:"pointer",color:"#ef4444",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>×</button>
+        )}
+      </div>
+      <div>
+        <input
+          type="number"
+          value={hours}
+          onChange={e=>handleHoursInput(e.target.value)}
+          placeholder="Allotted hours (e.g. 1.5 = 1h 30m)"
+          min={0}
+          step={0.5}
+          style={{width:"100%",padding:"10px 12px",border:"2px solid #e2e8f0",borderRadius:10,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}
+        />
+        {hours&&parseFloat(hours)>0&&<div style={{fontSize:11,color:"#6366f1",marginTop:3,fontWeight:700}}>= {fmtHours(parseFloat(hours))}</div>}
+      </div>
+      {/* FIX #1 & #5: Show topics from master chapter library */}
+      {topics.length>0&&(
+        <div style={{marginTop:8,padding:"8px 10px",background:"#eef2ff",borderRadius:8}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#6366f1",marginBottom:4}}>📋 {topics.length} topics will be imported from chapter library</div>
+          <div style={{fontSize:11,color:"#475569"}}>{topics.slice(0,3).map(t=>t.name).join(" · ")}{topics.length>3?` · +${topics.length-3} more`:""}</div>
+        </div>
+      )}
+      {name.trim()&&topics.length===0&&(
+        <div style={{marginTop:8,padding:"7px 10px",background:"#fef9c3",borderRadius:8}}>
+          <div style={{fontSize:11,color:"#92400e",fontWeight:600}}>💡 Add topics to this chapter in the Chapters tab first to auto-import them</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Batch Form Modal ──────────────────────────────────────────────
+function BatchFormModal({onSave,onClose,subject,masterChapters}) {
+  const [batchCode,setBatchCode]=useState("");
+  const [rows,setRows]=useState([{id:uid(),name:"",hours:""}]);
+  // FIX #6: use refs to track current row data without re-rendering the inputs
+  const rowDataRef = useRef({});
+
+  // Initialize ref data
+  useEffect(() => {
+    rows.forEach(r => {
+      if(!rowDataRef.current[r.id]) rowDataRef.current[r.id] = {name:"",hours:""};
+    });
+  }, []);
+
+  const addRow = () => {
+    const newId = uid();
+    rowDataRef.current[newId] = {name:"",hours:""};
+    setRows(prev=>[...prev,{id:newId,name:"",hours:""}]);
   };
 
-  const handleSave=()=>{
-    const validRows=rows.filter(r=>r.name.trim()&&parseFloat(r.hours)>0);
-    if(!batchCode.trim()||validRows.length===0) return;
-    onSave({batchCode:batchCode.trim().toUpperCase(),rows:validRows});
+  const removeRow = (id) => {
+    delete rowDataRef.current[id];
+    setRows(prev=>prev.filter(r=>r.id!==id));
+  };
+
+  const onNameChange = useCallback((id, val) => {
+    if(!rowDataRef.current[id]) rowDataRef.current[id]={name:"",hours:""};
+    rowDataRef.current[id].name = val;
+  }, []);
+
+  const onHoursChange = useCallback((id, val) => {
+    if(!rowDataRef.current[id]) rowDataRef.current[id]={name:"",hours:""};
+    rowDataRef.current[id].hours = val;
+  }, []);
+
+  const handleSave = () => {
+    if(!batchCode.trim()) return;
+    const validRows = rows
+      .map(r => rowDataRef.current[r.id] || {name:"",hours:""})
+      .filter(r => r.name.trim() && parseFloat(r.hours)>0);
+    if(validRows.length===0) return;
+    onSave({batchCode:batchCode.trim().toUpperCase(), rows:validRows});
   };
 
   return(
@@ -394,50 +499,21 @@ function BatchFormModal({onSave,onClose,subject,masterChapters}) {
           style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
       </div>
       <div style={{fontSize:13,fontWeight:700,color:"#475569",marginBottom:8}}>Chapters in this batch:</div>
-      <div ref={acRef} style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
         {rows.map((row,i)=>(
-          <div key={row.id} style={{background:"#f8fafc",borderRadius:14,padding:"12px 14px",border:"1.5px solid #e2e8f0",position:"relative"}}>
-            <div style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:8}}>
-              <div style={{flex:1,position:"relative"}}>
-                <input value={row.name} onChange={e=>handleChapterInput(row.id,e.target.value)}
-                  placeholder={`Chapter ${i+1} name...`}
-                  style={{width:"100%",padding:"10px 12px",border:"2px solid #e2e8f0",borderRadius:10,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
-                {openRow===row.id&&suggestions.length>0&&(
-                  <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",borderRadius:10,boxShadow:"0 8px 30px rgba(0,0,0,.13)",zIndex:250,maxHeight:200,overflowY:"auto",marginTop:3,border:"1.5px solid #e2e8f0"}}>
-                    {suggestions.map((s,si)=>(
-                      <div key={si} onMouseDown={()=>{updateRow(row.id,"name",s);setOpenRow(null);}}
-                        style={{padding:"10px 14px",cursor:"pointer",fontSize:13,fontWeight:600,color:"#1e293b",borderBottom:"1px solid #f1f5f9"}}
-                        onMouseEnter={e=>e.currentTarget.style.background="#f0f4ff"}
-                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                        📖 {s}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {rows.length>1&&(
-                <button onClick={()=>removeRow(row.id)} style={{background:"#fee2e2",border:"none",borderRadius:8,width:32,height:32,cursor:"pointer",color:"#ef4444",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>×</button>
-              )}
-            </div>
-            <div>
-              <input type="number" value={row.hours} onChange={e=>updateRow(row.id,"hours",e.target.value)}
-                placeholder="Allotted hours (e.g. 1.5 = 1h 30m)" min={0} step={0.5}
-                style={{width:"100%",padding:"10px 12px",border:"2px solid #e2e8f0",borderRadius:10,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
-              {row.hours&&parseFloat(row.hours)>0&&<div style={{fontSize:11,color:"#6366f1",marginTop:3,fontWeight:700}}>= {fmtHours(parseFloat(row.hours))}</div>}
-            </div>
-            {/* Show topics from master chapter if found */}
-            {(()=>{
-              const master=masterChapters.find(mc=>mc.name.toLowerCase()===row.name.toLowerCase());
-              const topics=master?.topics||[];
-              if(topics.length===0) return null;
-              return(
-                <div style={{marginTop:8,padding:"8px 10px",background:"#eef2ff",borderRadius:8}}>
-                  <div style={{fontSize:11,fontWeight:700,color:"#6366f1",marginBottom:4}}>📋 Topics from chapter library ({topics.length})</div>
-                  <div style={{fontSize:11,color:"#475569"}}>{topics.slice(0,3).map(t=>t.name).join(" · ")}{topics.length>3?` · +${topics.length-3} more`:""}</div>
-                </div>
-              );
-            })()}
-          </div>
+          <BatchRowInput
+            key={row.id}
+            rowId={row.id}
+            initialName={row.name}
+            initialHours={row.hours}
+            onNameChange={onNameChange}
+            onHoursChange={onHoursChange}
+            onRemove={removeRow}
+            showRemove={rows.length>1}
+            subject={subject}
+            masterChapters={masterChapters}
+            index={i}
+          />
         ))}
       </div>
       <button onClick={addRow} style={{width:"100%",padding:"10px",background:"#eef2ff",color:"#6366f1",border:"2px dashed #c7d2fe",borderRadius:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14,marginBottom:16}}>
@@ -451,8 +527,7 @@ function BatchFormModal({onSave,onClose,subject,masterChapters}) {
   );
 }
 
-// ── CHAPTER MASTER MODAL (topics only — no hours/batch/log) ───────
-// FIX #1 #2: chapters section = topic management only
+// ── Chapter Master Modal ──────────────────────────────────────────
 function ChapterMasterModal({chapter,onSave,onClose}) {
   const [topics,setTopics]=useState(chapter?.topics||[]);
   const [newTopic,setNewTopic]=useState("");
@@ -483,7 +558,7 @@ function ChapterMasterModal({chapter,onSave,onClose}) {
   );
 }
 
-// ── NEW CHAPTER MASTER MODAL ──────────────────────────────────────
+// ── Add Chapter Master Modal ──────────────────────────────────────
 function AddChapterMasterModal({onSave,onClose,subject}) {
   const [name,setName]=useState("");
   const [topics,setTopics]=useState([]);
@@ -516,7 +591,7 @@ function AddChapterMasterModal({onSave,onClose,subject}) {
   );
 }
 
-// ── Home Tab (v9 design — FIX #3: remove recent activity) ─────────
+// ── Home Tab ──────────────────────────────────────────────────────
 function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus}) {
   const batchChapters=chapters.filter(c=>c.batchCode);
   const totalAllotted=batchChapters.reduce((s,c)=>s+c.totalHours,0);
@@ -531,7 +606,6 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus}) {
 
   return(
     <div style={{padding:"0 0 20px"}}>
-      {/* Hero Banner — v9 original */}
       <div style={{background:"linear-gradient(135deg,#4f46e5 0%,#7c3aed 60%,#6366f1 100%)",padding:"28px 20px 24px",color:"#fff",position:"relative",overflow:"hidden",borderRadius:"0 0 28px 28px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
           <div>
@@ -558,7 +632,6 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus}) {
       </div>
 
       <div style={{padding:"20px 16px 0"}}>
-        {/* Batch Pills */}
         {batches.length>0&&(
           <div style={{marginBottom:20}}>
             <div style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:10}}>🗂️ Your Batches</div>
@@ -584,8 +657,6 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus}) {
           </div>
         )}
 
-        {/* FIX #3: No recent activity section */}
-
         {batchChapters.length===0&&(
           <div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}>
             <div style={{fontSize:56,marginBottom:16}}>📭</div>
@@ -598,10 +669,9 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus}) {
   );
 }
 
-// ── Chapters Tab (FIX #1 #2 #4: topic manager, one entry per chapter, no batch/hours/logo) ──
+// ── Chapters Tab ──────────────────────────────────────────────────
 function ChaptersTab({masterChapters,onOpenMaster,onAddMaster,onDeleteMaster}) {
   const [search,setSearch]=useState("");
-  // FIX #4: unique chapter names — masterChapters already unique (one per name)
   const filtered=masterChapters.filter(c=>c.name.toLowerCase().includes(search.toLowerCase()));
 
   return(
@@ -618,7 +688,6 @@ function ChaptersTab({masterChapters,onOpenMaster,onAddMaster,onDeleteMaster}) {
         {filtered.map(c=>{
           const topicCount=(c.topics||[]).length;
           return(
-            // FIX #1: compact, no logo on left, no batch/hours info
             <div key={c.id} onClick={()=>onOpenMaster(c)}
               style={{background:"#fff",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 6px rgba(0,0,0,.06)",cursor:"pointer",border:"1.5px solid #f1f5f9",display:"flex",alignItems:"center",gap:12,transition:"box-shadow .15s"}}
               onMouseEnter={e=>e.currentTarget.style.boxShadow="0 3px 14px rgba(99,102,241,.13)"}
@@ -639,7 +708,7 @@ function ChaptersTab({masterChapters,onOpenMaster,onAddMaster,onDeleteMaster}) {
   );
 }
 
-// ── Batches Tab (v9 design — + Add Batch button) ──────────────────
+// ── Batches Tab ───────────────────────────────────────────────────
 function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatch}) {
   const batches=[...new Set(chapters.filter(c=>c.batchCode).map(c=>c.batchCode))].sort();
   return(
@@ -683,7 +752,7 @@ function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatch}) {
   );
 }
 
-// ── Profile Tab (v9 original) ─────────────────────────────────────
+// ── Profile Tab ───────────────────────────────────────────────────
 function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
   const fileRef=useRef();
   const batchChapters=chapters.filter(c=>c.batchCode);
@@ -700,9 +769,7 @@ function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
     reader.onload=ev=>{
       const photoData=ev.target.result;
       const updated={...profile,photo:photoData};
-      // Save to Supabase (primary store for photo)
       supabase.from("teachers").update({photo:photoData}).eq("code",profile.code);
-      // Try localStorage but ignore quota errors — Supabase is the source of truth
       try{localStorage.setItem("lt_session",JSON.stringify(updated));}catch(e){}
       onUpdateProfile(updated);
     };
@@ -756,12 +823,12 @@ function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
           </button>
         </div>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"#cbd5e1",paddingBottom:10}}>LectureTrack v12 · Made with ❤️ for teachers</div>
+      <div style={{textAlign:"center",fontSize:12,color:"#cbd5e1",paddingBottom:10}}>LectureTrack v13 · Made with ❤️ for teachers</div>
     </div>
   );
 }
 
-// ── Batch Detail Page (FIX #6: topics auto from master, Show More) ─
+// ── Batch Page ────────────────────────────────────────────────────
 function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapter,onEditChapter,onOpenChapter,onDeleteBatch}) {
   const total=chapters.reduce((s,c)=>s+c.totalHours,0);
   const done=chapters.reduce((s,c)=>s+c.completedHours,0);
@@ -786,14 +853,12 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
       <div style={{padding:"20px 16px 80px"}}>
         {chapters.map(c=>{
           const cp=c.totalHours>0?(c.completedHours/c.totalHours)*100:0;
-          // FIX #6: get topics from chapter itself (synced from master)
           const topics=c.topics||[];
           return(
             <BatchChapterCard key={c.id} chapter={c} cp={cp} color={color} topics={topics}
               onOpen={()=>onOpenChapter(c.id)} onEdit={()=>onEditChapter(c)} onDelete={()=>onDeleteChapter(c.id)}/>
           );
         })}
-        {/* Delete batch button at bottom */}
         <button onClick={onDeleteBatch}
           style={{width:"100%",marginTop:8,padding:"14px",background:"#fff",color:"#ef4444",border:"2px solid #fecaca",borderRadius:16,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(239,68,68,.1)"}}>
           🗑️ Delete This Entire Batch
@@ -803,24 +868,25 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
   );
 }
 
-// ── Batch Chapter Card (with Show More topics) ────────────────────
+// ── Batch Chapter Card — FIX #2: "Tap to open" as colored banner ─
 function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
   const [showAllTopics,setShowAllTopics]=useState(false);
   const SHOW_LIMIT=3;
   const visibleTopics=showAllTopics?topics:topics.slice(0,SHOW_LIMIT);
+  const status=getStatus(chapter.completedHours,chapter.totalHours);
 
   return(
-    <div style={{background:"#fff",borderRadius:18,padding:16,marginBottom:12,boxShadow:"0 2px 12px rgba(0,0,0,.06)",border:`2px solid ${color}22`}}>
+    <div style={{background:"#fff",borderRadius:18,marginBottom:12,boxShadow:"0 2px 12px rgba(0,0,0,.06)",border:`2px solid ${color}22`,overflow:"hidden"}}>
       {/* Header row */}
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
-        <div onClick={onOpen} style={{fontSize:15,fontWeight:800,color:"#0f172a",flex:1,cursor:"pointer"}}>{chapter.name}</div>
-        <div style={{display:"flex",gap:6}}>
-          <button onClick={onEdit} style={{background:"#eef2ff",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✏️</button>
-          <button onClick={onDelete} style={{background:"#fee2e2",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>🗑️</button>
+      <div style={{padding:"16px 16px 0 16px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+          <div style={{fontSize:15,fontWeight:800,color:"#0f172a",flex:1}}>{chapter.name}</div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={onEdit} style={{background:"#eef2ff",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✏️</button>
+            <button onClick={onDelete} style={{background:"#fee2e2",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>🗑️</button>
+          </div>
         </div>
-      </div>
-      {/* Stats */}
-      <div onClick={onOpen} style={{cursor:"pointer"}}>
+        {/* Stats */}
         <div style={{display:"flex",gap:8,marginBottom:10}}>
           {[{l:"Allotted",v:fmtHours(chapter.totalHours)},{l:"Taken",v:fmtHours(chapter.completedHours),col:"#10b981"},{l:"Extra",v:fmtHours(chapter.extraHours||0),col:"#f59e0b"},{l:"Left",v:fmtHours(Math.max(0,chapter.totalHours-chapter.completedHours)),col:"#ef4444"}].map(s=>(
             <div key={s.l} style={{flex:1,background:"#f8fafc",borderRadius:8,padding:"6px 4px",textAlign:"center"}}>
@@ -830,34 +896,43 @@ function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
           ))}
         </div>
         <PBar pct={cp} color={color} bg="#f1f5f9" height={5}/>
-        <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{cp.toFixed(0)}% · Tap to open →</div>
-      </div>
-      {/* FIX #6: Topics with Show More */}
-      {topics.length>0&&(
-        <div style={{marginTop:10,borderTop:"1px solid #f1f5f9",paddingTop:10}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#475569",marginBottom:6}}>📋 Topics</div>
-          <div style={{display:"flex",flexDirection:"column",gap:4}}>
-            {visibleTopics.map((t,i)=>(
-              <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:t.done?"#f0fdf4":"#f8fafc",border:`1px solid ${t.done?"#bbf7d0":"#e2e8f0"}`}}>
-                <span style={{fontSize:11,color:t.done?"#94a3b8":"#1e293b",textDecoration:t.done?"line-through":"none",fontWeight:600,flex:1}}>{i+1}. {t.name}</span>
-                {t.done&&<span style={{fontSize:9,color:"#10b981",fontWeight:700}}>✓</span>}
-              </div>
-            ))}
-          </div>
-          {topics.length>SHOW_LIMIT&&(
-            <button onClick={()=>setShowAllTopics(!showAllTopics)}
-              style={{marginTop:6,background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#6366f1",fontWeight:700,padding:"4px 0",fontFamily:"inherit"}}>
-              {showAllTopics?`▲ Show less`:`▼ Show ${topics.length-SHOW_LIMIT} more topics`}
-            </button>
-          )}
+        <div style={{fontSize:11,color:"#94a3b8",marginTop:4,marginBottom:10}}>
+          {cp.toFixed(0)}% complete · <span style={{color:STATUS[status].color,fontWeight:700}}>{STATUS[status].label}</span>
         </div>
-      )}
+        {/* FIX #1 & #5: Topics from master */}
+        {topics.length>0&&(
+          <div style={{borderTop:"1px solid #f1f5f9",paddingTop:10,marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#475569",marginBottom:6}}>📋 Topics</div>
+            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+              {visibleTopics.map((t,i)=>(
+                <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:t.done?"#f0fdf4":"#f8fafc",border:`1px solid ${t.done?"#bbf7d0":"#e2e8f0"}`}}>
+                  <span style={{fontSize:11,color:t.done?"#94a3b8":"#1e293b",textDecoration:t.done?"line-through":"none",fontWeight:600,flex:1}}>{i+1}. {t.name}</span>
+                  {t.done&&<span style={{fontSize:9,color:"#10b981",fontWeight:700}}>✓</span>}
+                </div>
+              ))}
+            </div>
+            {topics.length>SHOW_LIMIT&&(
+              <button onClick={()=>setShowAllTopics(!showAllTopics)}
+                style={{marginTop:6,background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#6366f1",fontWeight:700,padding:"4px 0",fontFamily:"inherit"}}>
+                {showAllTopics?`▲ Show less`:`▼ Show ${topics.length-SHOW_LIMIT} more topics`}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {/* FIX #2: "Tap to open" as a proper colored banner at the bottom */}
+      <div onClick={onOpen}
+        style={{background:`linear-gradient(135deg,${color},${color}dd)`,padding:"11px 18px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:0}}>
+        <span style={{color:"#fff",fontSize:13,fontWeight:700}}>📖 Open Chapter</span>
+        <span style={{color:"rgba(255,255,255,.85)",fontSize:12,fontWeight:600}}>Log hours, topics & notes →</span>
+      </div>
     </div>
   );
 }
 
-// ── Chapter Detail Page (v9 original — hours + log + topics + notes) ──
+// ── Detail Page — FIX #3 (date/period layout) + FIX #4 (auto extra) + FIX #6 (keyboard) ──
 function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
+  // FIX #6: use uncontrolled-style local state that doesn't trigger parent re-renders
   const [logH,setLogH]=useState("");
   const [extraH,setExtraH]=useState("");
   const [logDate,setLogDate]=useState(todayStr());
@@ -868,34 +943,63 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
   const [editLog,setEditLog]=useState(null);
   const ntRef=useRef(null);
 
+  // Keep local notes in sync if chapter changes from outside
+  const prevNotesRef=useRef(chapter.notes||"");
+  useEffect(()=>{
+    if(chapter.notes!==prevNotesRef.current){
+      setNotes(chapter.notes||"");
+      prevNotesRef.current=chapter.notes||"";
+    }
+  },[chapter.id]);
+
   const pct=chapter.totalHours>0?(chapter.completedHours/chapter.totalHours)*100:0;
   const remaining=Math.max(0,chapter.totalHours-chapter.completedHours);
   const status=getStatus(chapter.completedHours,chapter.totalHours);
   const logs=chapter.hourLogs||[];
 
-  const logHours=()=>{
+  // FIX #4: Auto-detect extra hours — if adding logH hours would exceed allotted, auto-flag as extra
+  const logHoursVal = parseHours(logH);
+  const wouldExceed = logHoursVal > 0 && (chapter.completedHours + logHoursVal) > chapter.totalHours;
+  const autoExtraAmount = wouldExceed
+    ? roundToMinute(Math.min(logHoursVal, (chapter.completedHours + logHoursVal) - chapter.totalHours))
+    : 0;
+
+  // FIX #6: Use useCallback so functions don't change identity on every render
+  const logHours=useCallback(()=>{
     const h=roundToMinute(parseHours(logH));
     if(!h||h<=0) return;
-    const newLog={id:uid(),hours:h,date:logDate,note:logNote,type:"regular"};
-    onUpdate({...chapter,completedHours:roundToMinute(chapter.completedHours+h),hourLogs:[...logs,newLog]});
+    // FIX #4: auto-detect extra portion
+    const currentCompleted = chapter.completedHours;
+    const newCompleted = roundToMinute(currentCompleted + h);
+    const extraPortion = chapter.totalHours > 0
+      ? roundToMinute(Math.max(0, newCompleted - chapter.totalHours))
+      : 0;
+    const newLog={id:uid(),hours:h,date:logDate,note:logNote,type:extraPortion>0&&extraPortion===h?"extra":"regular",extraNote:extraPortion>0?`(includes ${fmtHours(extraPortion)} extra)`:""};
+    const updatedChapter = {
+      ...chapter,
+      completedHours: newCompleted,
+      extraHours: extraPortion > 0 ? roundToMinute((chapter.extraHours||0) + extraPortion) : chapter.extraHours,
+      hourLogs:[...logs,newLog]
+    };
+    onUpdate(updatedChapter);
     setLogH("");setLogNote("");
-  };
+  },[logH,logDate,logNote,chapter,logs,onUpdate]);
 
-  const logExtra=()=>{
+  const logExtra=useCallback(()=>{
     const h=roundToMinute(parseHours(extraH));
     if(!h||h<=0) return;
     const newLog={id:uid(),hours:h,date:logDate,note:logNote||"Extra",type:"extra"};
     onUpdate({...chapter,completedHours:roundToMinute(chapter.completedHours+h),extraHours:roundToMinute((chapter.extraHours||0)+h),hourLogs:[...logs,newLog]});
     setExtraH("");setLogNote("");
-  };
+  },[extraH,logDate,logNote,chapter,logs,onUpdate]);
 
-  const deleteLog=logId=>{
+  const deleteLog=useCallback(logId=>{
     const log=logs.find(l=>l.id===logId);
     if(!log||!window.confirm(`Remove ${fmtHours(log.hours)} on ${fmtDate(log.date)}?`)) return;
     onUpdate({...chapter,completedHours:roundToMinute(Math.max(0,chapter.completedHours-log.hours)),extraHours:log.type==="extra"?roundToMinute(Math.max(0,(chapter.extraHours||0)-log.hours)):chapter.extraHours,hourLogs:logs.filter(l=>l.id!==logId)});
-  };
+  },[logs,chapter,onUpdate]);
 
-  const saveEditLog=()=>{
+  const saveEditLog=useCallback(()=>{
     if(!editLog) return;
     const old=logs.find(l=>l.id===editLog.id);
     if(!old) return;
@@ -903,13 +1007,24 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
     const diff=newH-old.hours;
     onUpdate({...chapter,completedHours:roundToMinute(Math.max(0,chapter.completedHours+diff)),extraHours:old.type==="extra"?roundToMinute(Math.max(0,(chapter.extraHours||0)+diff)):chapter.extraHours,hourLogs:logs.map(l=>l.id===editLog.id?{...l,hours:newH,date:editLog.date,note:editLog.note}:l)});
     setEditLog(null);
-  };
+  },[editLog,logs,chapter,onUpdate]);
 
-  const toggleTopic=id=>onUpdate({...chapter,topics:(chapter.topics||[]).map(t=>t.id===id?{...t,done:!t.done}:t)});
-  const markLast=id=>onUpdate({...chapter,lastCompletedTopic:chapter.lastCompletedTopic===id?null:id});
-  const deleteTopic=id=>onUpdate({...chapter,topics:(chapter.topics||[]).filter(t=>t.id!==id)});
-  const addTopic=()=>{if(!newTopic.trim())return;onUpdate({...chapter,topics:[...(chapter.topics||[]),{id:uid(),name:newTopic.trim(),done:false}]});setNewTopic("");};
-  const handleNotes=v=>{setNotes(v);clearTimeout(ntRef.current);ntRef.current=setTimeout(()=>onUpdate({...chapter,notes:v}),800);};
+  const toggleTopic=useCallback(id=>onUpdate({...chapter,topics:(chapter.topics||[]).map(t=>t.id===id?{...t,done:!t.done}:t)}),[chapter,onUpdate]);
+  const markLast=useCallback(id=>onUpdate({...chapter,lastCompletedTopic:chapter.lastCompletedTopic===id?null:id}),[chapter,onUpdate]);
+  const deleteTopic=useCallback(id=>onUpdate({...chapter,topics:(chapter.topics||[]).filter(t=>t.id!==id)}),[chapter,onUpdate]);
+
+  // FIX #6: addTopic uses local state only, not triggering re-render of other inputs
+  const addTopic=useCallback(()=>{
+    if(!newTopic.trim())return;
+    onUpdate({...chapter,topics:[...(chapter.topics||[]),{id:uid(),name:newTopic.trim(),done:false}]});
+    setNewTopic("");
+  },[newTopic,chapter,onUpdate]);
+
+  const handleNotes=useCallback(v=>{
+    setNotes(v);
+    clearTimeout(ntRef.current);
+    ntRef.current=setTimeout(()=>onUpdate({...chapter,notes:v}),800);
+  },[chapter,onUpdate]);
 
   const Sec=({title,children})=>(
     <div style={{background:"#fff",borderRadius:20,padding:20,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,.06)"}}>
@@ -941,38 +1056,64 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
         </div>
         {status==="exceeded"&&<div style={{marginTop:10,background:"rgba(239,68,68,.3)",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700}}>⚠️ Exceeded by {fmtHours(chapter.completedHours-chapter.totalHours)}</div>}
       </div>
+
       <div style={{padding:"20px 16px 80px",maxWidth:560,margin:"0 auto"}}>
         <Sec title="📅 Log Class Hours">
           <div style={{marginBottom:12}}>
             <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Hours (decimal · e.g. 1.25 = 1h 15m)</label>
-            <div style={{display:"flex",gap:8,marginBottom:6}}>
+            {/* Hours input + Log button */}
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
               <div style={{flex:1}}>
-                <input type="number" min={0} step={0.0833} value={logH} onChange={e=>setLogH(e.target.value)} onKeyDown={e=>e.key==="Enter"&&logHours()} placeholder="e.g. 1.5"
+                <input type="number" min={0} step={0.0833} value={logH}
+                  onChange={e=>setLogH(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&logHours()}
+                  placeholder="e.g. 1.5"
                   style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
                 {logH&&<div style={{fontSize:11,color:color,marginTop:3,fontWeight:700}}>= {fmtHours(parseHours(logH))}</div>}
               </div>
-              <button onClick={logHours} style={{background:`linear-gradient(135deg,${color},${color}bb)`,color:"#fff",border:"none",borderRadius:12,padding:"0 22px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:15,boxShadow:`0 4px 14px ${color}44`}}>+ Log</button>
+              <button onClick={logHours} style={{background:`linear-gradient(135deg,${color},${color}bb)`,color:"#fff",border:"none",borderRadius:12,padding:"0 22px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:15,boxShadow:`0 4px 14px ${color}44`,flexShrink:0}}>+ Log</button>
             </div>
-            <div style={{display:"flex",gap:8,marginBottom:6}}>
-              <div style={{flex:1}}>
-                <label style={{display:"block",fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4}}>📅 Date</label>
-                <input type="date" value={logDate} onChange={e=>setLogDate(e.target.value)} style={{width:"100%",padding:"10px 12px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
+
+            {/* FIX #4: Show auto-extra warning */}
+            {wouldExceed&&logHoursVal>0&&(
+              <div style={{background:"linear-gradient(135deg,#fff7ed,#ffedd5)",border:"2px solid #fed7aa",borderRadius:12,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:18}}>⚠️</span>
+                <div>
+                  <div style={{fontSize:12,fontWeight:800,color:"#c2410c"}}>This will exceed allotted hours!</div>
+                  <div style={{fontSize:11,color:"#ea580c",marginTop:2}}>{fmtHours(autoExtraAmount)} will be auto-marked as extra hours</div>
+                </div>
               </div>
-              <div style={{flex:1}}>
-                <label style={{display:"block",fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4}}>📝 Period/Note</label>
-                <input type="text" value={logNote} onChange={e=>setLogNote(e.target.value)} placeholder="e.g. Period 3" style={{width:"100%",padding:"10px 12px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
-              </div>
+            )}
+
+            {/* FIX #3: Date and Period/Note on separate rows — no overlap */}
+            <div style={{marginBottom:6}}>
+              <label style={{display:"block",fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4}}>📅 Date</label>
+              <input type="date" value={logDate}
+                onChange={e=>setLogDate(e.target.value)}
+                style={{width:"100%",padding:"10px 12px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
+            </div>
+            <div>
+              <label style={{display:"block",fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4}}>📝 Period / Note</label>
+              <input type="text" value={logNote}
+                onChange={e=>setLogNote(e.target.value)}
+                placeholder="e.g. Period 3"
+                style={{width:"100%",padding:"10px 12px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
             </div>
           </div>
+
+          {/* Extra Hours section */}
           <div style={{background:"linear-gradient(135deg,#fffbeb,#fef9c3)",border:"2px solid #fde68a",borderRadius:14,padding:"16px"}}>
             <div style={{fontSize:13,fontWeight:800,color:"#92400e",marginBottom:10}}>⭐ Extra Hours (Beyond Allotted)</div>
             <div style={{display:"flex",gap:8}}>
               <div style={{flex:1}}>
-                <input type="number" min={0} step={0.0833} value={extraH} onChange={e=>setExtraH(e.target.value)} onKeyDown={e=>e.key==="Enter"&&logExtra()} placeholder="e.g. 0.5"
+                <input type="number" min={0} step={0.0833} value={extraH}
+                  onChange={e=>setExtraH(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&logExtra()}
+                  placeholder="e.g. 0.5"
                   style={{width:"100%",padding:"11px 14px",border:"2px solid #fde68a",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fffef5",boxSizing:"border-box"}}/>
                 {extraH&&<div style={{fontSize:11,color:"#92400e",marginTop:3,fontWeight:700}}>= {fmtHours(parseHours(extraH))}</div>}
               </div>
-              <button onClick={logExtra} style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",border:"none",borderRadius:12,padding:"0 20px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:14,boxShadow:"0 4px 14px rgba(245,158,11,.3)"}}>+ Add</button>
+              <button onClick={logExtra} style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",border:"none",borderRadius:12,padding:"0 20px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:14,boxShadow:"0 4px 14px rgba(245,158,11,.3)",flexShrink:0}}>+ Add</button>
             </div>
           </div>
         </Sec>
@@ -987,7 +1128,7 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
                 {[...logs].reverse().map(log=>(
                   <div key={log.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,background:log.type==="extra"?"linear-gradient(135deg,#fffbeb,#fef9c3)":"#f8fafc",border:`2px solid ${log.type==="extra"?"#fde68a":"#e2e8f0"}`}}>
                     <div style={{flex:1}}>
-                      <div style={{fontSize:14,fontWeight:800,color:log.type==="extra"?"#92400e":color}}>{fmtHours(log.hours)} {log.type==="extra"?"⭐ Extra":"🕐 Regular"}</div>
+                      <div style={{fontSize:14,fontWeight:800,color:log.type==="extra"?"#92400e":color}}>{fmtHours(log.hours)} {log.type==="extra"?"⭐ Extra":"🕐 Regular"}{log.extraNote?<span style={{fontSize:11,fontWeight:600,color:"#f97316",marginLeft:6}}>{log.extraNote}</span>:null}</div>
                       <div style={{fontSize:12,color:"#64748b",marginTop:2}}>📅 {fmtDate(log.date)}{log.note?" · "+log.note:""}</div>
                     </div>
                     <button onClick={()=>setEditLog({...log,hours:String(log.hours)})} style={{background:"#eef2ff",border:"none",borderRadius:9,width:30,height:30,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✏️</button>
@@ -1037,8 +1178,11 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
               );
             })}
           </div>
+          {/* FIX #6: topic input is isolated */}
           <div style={{display:"flex",gap:8}}>
-            <input value={newTopic} onChange={e=>setNewTopic(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addTopic();}} placeholder="Add a topic..."
+            <input value={newTopic} onChange={e=>setNewTopic(e.target.value)}
+              onKeyDown={e=>{if(e.key==="Enter")addTopic();}}
+              placeholder="Add a topic..."
               style={{flex:1,padding:"11px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff"}}/>
             <button onClick={addTopic} style={{background:`linear-gradient(135deg,${color},${color}bb)`,color:"#fff",border:"none",borderRadius:12,padding:"0 18px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>+ Add</button>
           </div>
@@ -1054,7 +1198,7 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
   );
 }
 
-// ── Bottom Nav (v9 order: Home, Batches, Chapters, Profile) ───────
+// ── Bottom Nav ────────────────────────────────────────────────────
 function BottomNav({active,onChange}) {
   const tabs=[
     {id:"home",icon:"🏠",label:"Home"},
@@ -1079,20 +1223,17 @@ function BottomNav({active,onChange}) {
 }
 
 // ── Main App ──────────────────────────────────────────────────────
-// Data model:
-//   masterChapters: stored in Supabase with batch_code = null → chapter library (topics only)
-//   batchChapters:  stored with batch_code set → actual tracking chapters
 export default function App() {
   const [splashDone,setSplashDone]=useState(false);
   const [profile,setProfile]=useState(()=>{try{const s=localStorage.getItem("lt_session");return s?JSON.parse(s):null;}catch{return null;}});
-  const [chapters,setChapters]=useState([]);  // all from supabase
+  const [chapters,setChapters]=useState([]);
   const [loading,setLoading]=useState(false);
   const [syncStatus,setSyncStatus]=useState(null);
   const [tab,setTab]=useState("home");
   const [addBatchOpen,setAddBatchOpen]=useState(false);
   const [addMasterOpen,setAddMasterOpen]=useState(false);
-  const [editMaster,setEditMaster]=useState(null);  // for topic editing
-  const [editChapter,setEditChapter]=useState(null); // for batch chapter edit
+  const [editMaster,setEditMaster]=useState(null);
+  const [editChapter,setEditChapter]=useState(null);
   const [detailId,setDetailId]=useState(null);
   const [batchView,setBatchView]=useState(null);
   const congratsShown=useRef(false);
@@ -1100,13 +1241,9 @@ export default function App() {
 
   useEffect(()=>{const t=setTimeout(()=>setSplashDone(true),2200);return()=>clearTimeout(t);},[]);
 
-
-
-  // On load: fetch profile (for photo) + chapters from Supabase
   useEffect(()=>{
     if(!profile) return;
     setLoading(true);
-    // Re-fetch teacher row to get latest photo (localStorage photo can be lost on quota exceed)
     supabase.from("teachers").select("photo").eq("code",profile.code).single()
       .then(({data})=>{
         if(data?.photo && data.photo!==profile.photo){
@@ -1149,9 +1286,10 @@ export default function App() {
     syncChapter(updated);
   },[syncChapter]);
 
-  // Master chapter: batch_code = null, totalHours = 0
+  const masterChapters=useMemo(()=>chapters.filter(c=>!c.batchCode),[chapters]);
+  const batchChapters=useMemo(()=>chapters.filter(c=>c.batchCode),[chapters]);
+
   const addMasterChapter=async({name,topics})=>{
-    // Prevent duplicate master chapter names
     const exists=masterChapters.find(mc=>mc.name.toLowerCase()===name.toLowerCase());
     if(exists){alert("A chapter with this name already exists in your library.");return;}
     const chapter={id:uid(),name,batchCode:null,totalHours:0,completedHours:0,extraHours:0,topics,notes:"",lastCompletedTopic:null,hourLogs:[]};
@@ -1165,7 +1303,7 @@ export default function App() {
 
   const saveMasterTopics=async(updated)=>{
     setChapters(prev=>prev.map(c=>c.id===updated.id?updated:c));
-    // Also sync topics to all batch chapters with same name
+    // Sync topics to all batch chapters with same name
     const batchCopies=chapters.filter(c=>c.batchCode&&c.name.toLowerCase()===updated.name.toLowerCase());
     for(const bc of batchCopies){
       const merged={...bc,topics:updated.topics.map(t=>({...t,done:bc.topics.find(bt=>bt.name===t.name)?.done||false}))};
@@ -1182,11 +1320,12 @@ export default function App() {
     await supabase.from("chapters").delete().eq("id",id);
   };
 
-  // Add batch: create batch chapters from the form rows, copying topics from master
+  // FIX #1 & #5: addBatch copies topics from master chapters
   const addBatch=async({batchCode,rows})=>{
     const newChapters=[];
     for(const row of rows){
       const master=masterChapters.find(mc=>mc.name.toLowerCase()===row.name.trim().toLowerCase());
+      // Copy topics from master, resetting done state
       const topics=master?master.topics.map(t=>({...t,id:uid(),done:false})):[];
       const nc={id:uid(),name:row.name.trim(),batchCode,totalHours:parseFloat(row.hours),completedHours:0,extraHours:0,topics,notes:"",lastCompletedTopic:null,hourLogs:[]};
       newChapters.push(nc);
@@ -1222,17 +1361,15 @@ export default function App() {
 
   const logout=()=>{localStorage.removeItem("lt_session");window.location.reload();};
 
-  // Derived lists
-  const masterChapters=chapters.filter(c=>!c.batchCode);  // chapter library
-  const batchChapters=chapters.filter(c=>c.batchCode);    // actual tracking
+  const batches=useMemo(()=>[...new Set(batchChapters.map(c=>c.batchCode))].sort(),[batchChapters]);
+  const getBatchColor=useCallback(b=>BATCH_COLORS[batches.indexOf(b)%BATCH_COLORS.length],[batches]);
 
   const STYLE=`
     @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800;900&display=swap');
     *{box-sizing:border-box;} body{margin:0;font-family:'Sora',sans-serif;background:#f8fafc;overscroll-behavior:none;}
     ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:#dde;border-radius:99px;}
     input:focus,textarea:focus{border-color:#6366f1!important;box-shadow:0 0 0 3px rgba(99,102,241,.1);}
-    /* Prevent accidental zoom */
-    html{touch-action:pan-x pan-y;} * {touch-action:inherit;}
+    html{touch-action:pan-x pan-y;} *{touch-action:inherit;}
     input,textarea,select{touch-action:manipulation;}
   `;
 
@@ -1242,9 +1379,6 @@ export default function App() {
     const td=batchChapters.reduce((s,c)=>s+c.completedHours,0);
     return <><style>{STYLE}</style><CongratsScreen profile={profile} totalHours={td} onClose={()=>setShowCongrats(false)}/></>;
   }
-
-  const batches=[...new Set(batchChapters.map(c=>c.batchCode))].sort();
-  const getBatchColor=b=>BATCH_COLORS[batches.indexOf(b)%BATCH_COLORS.length];
 
   const detailChapter=chapters.find(c=>c.id===detailId);
   if(detailChapter) return(
@@ -1263,18 +1397,7 @@ export default function App() {
         onDeleteBatch={()=>deleteBatch(batchView)}/>
       {editChapter&&(
         <Modal title="✏️ Edit Chapter" onClose={()=>setEditChapter(null)}>
-          <div style={{marginBottom:14}}>
-            <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Chapter Name</label>
-            <input defaultValue={editChapter.name} id="ec-name" style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
-          </div>
-          <div style={{marginBottom:18}}>
-            <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Allotted Hours</label>
-            <input type="number" defaultValue={editChapter.totalHours} id="ec-hours" style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
-          </div>
-          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-            <button onClick={()=>setEditChapter(null)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
-            <button onClick={()=>{const n=document.getElementById("ec-name").value;const h=document.getElementById("ec-hours").value;if(n&&h)editBatchChapterSave({name:n,totalHours:parseFloat(h)});}} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Save ✓</button>
-          </div>
+          <EditChapterForm chapter={editChapter} onSave={editBatchChapterSave} onClose={()=>setEditChapter(null)}/>
         </Modal>
       )}
       </>
@@ -1303,6 +1426,31 @@ export default function App() {
     {addBatchOpen&&<BatchFormModal onSave={addBatch} onClose={()=>setAddBatchOpen(false)} subject={profile.subject} masterChapters={masterChapters}/>}
     {addMasterOpen&&<AddChapterMasterModal onSave={addMasterChapter} onClose={()=>setAddMasterOpen(false)} subject={profile.subject}/>}
     {editMaster&&<ChapterMasterModal chapter={editMaster} onSave={saveMasterTopics} onClose={()=>setEditMaster(null)}/>}
+    </>
+  );
+}
+
+// ── FIX #6: Edit Chapter Form — isolated component to avoid re-render keyboard issues ──
+function EditChapterForm({chapter, onSave, onClose}) {
+  const [name, setName] = useState(chapter.name);
+  const [hours, setHours] = useState(String(chapter.totalHours));
+  return (
+    <>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Chapter Name</label>
+        <input value={name} onChange={e=>setName(e.target.value)}
+          style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
+      </div>
+      <div style={{marginBottom:18}}>
+        <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Allotted Hours</label>
+        <input type="number" value={hours} onChange={e=>setHours(e.target.value)}
+          style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
+      </div>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
+        <button onClick={()=>{if(name&&hours)onSave({name,totalHours:parseFloat(hours)});}}
+          style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Save ✓</button>
+      </div>
     </>
   );
 }
