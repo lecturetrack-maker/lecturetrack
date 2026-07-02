@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { Home as HomeIcon, FolderKanban, BookOpen, User as UserIcon, Bell } from "lucide-react";
 
 const supabase = createClient(
   "https://ddfmkfkvvadzlihiulnj.supabase.co",
@@ -109,7 +110,10 @@ function monthlyTotals(chapters, mKey) {
   let taken=0, extra=0;
   chapters.forEach(c=>{
     (c.hourLogs||[]).forEach(l=>{
-      if(monthKey(l.date)===mKey){ taken+=l.hours; if(l.type==="extra") extra+=l.hours; }
+      if(monthKey(l.date)===mKey){
+        taken+=l.hours;
+        extra+= l.extraAmount!=null ? l.extraAmount : (l.type==="extra"?l.hours:0);
+      }
     });
   });
   return {taken:roundToMinute(taken), extra:roundToMinute(extra)};
@@ -739,7 +743,7 @@ function AddChapterMasterModal({onSave,onClose,subject}) {
 }
 
 // ── Home Tab ──────────────────────────────────────────────────────
-function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus}) {
+function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProfile}) {
   const batchChapters=chapters.filter(c=>c.batchCode);
   const totalAllotted=batchChapters.reduce((s,c)=>s+c.totalHours,0);
   const totalDoneAllTime=batchChapters.reduce((s,c)=>s+c.completedHours,0);
@@ -771,9 +775,12 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus}) {
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             {syncStatus&&<SyncBadge status={syncStatus}/>}
-            <div style={{width:38,height:38,borderRadius:"50%",background:"#eef2ff",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"2px solid #e0e7ff",flexShrink:0}}>
-              {profile.photo?<img src={profile.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:16}}>🔔</span>}
-            </div>
+            <button style={{width:38,height:38,borderRadius:"50%",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",border:"1.5px solid #e2e8f0",flexShrink:0,cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
+              <Bell size={17} color="#4338ca" strokeWidth={2}/>
+            </button>
+            <button onClick={onGoProfile} style={{width:38,height:38,borderRadius:"50%",background:"#eef2ff",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"2px solid #e0e7ff",flexShrink:0,cursor:"pointer",padding:0}}>
+              {profile.photo?<img src={profile.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<UserIcon size={17} color="#6366f1"/>}
+            </button>
           </div>
         </div>
       </div>
@@ -1093,7 +1100,7 @@ function BatchHistorySection({batchCode,color,chapters}) {
 
   const monthLogs=useMemo(()=>allLogs.filter(l=>monthKey(l.date)===selMonth),[allLogs,selMonth]);
   const monthTaken=monthLogs.reduce((s,l)=>s+l.hours,0);
-  const monthExtra=monthLogs.filter(l=>l.type==="extra").reduce((s,l)=>s+l.hours,0);
+  const monthExtra=monthLogs.reduce((s,l)=>s+(l.extraAmount!=null?l.extraAmount:(l.type==="extra"?l.hours:0)),0);
 
   const weeks=useMemo(()=>{
     const map={};
@@ -1263,7 +1270,7 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
     const extraPortion = chapter.totalHours > 0
       ? roundToMinute(Math.max(0, newCompleted - chapter.totalHours))
       : 0;
-    const newLog={id:uid(),hours:h,date:logDate,note:logNote,type:extraPortion>0&&extraPortion===h?"extra":"regular",extraNote:extraPortion>0?`(includes ${fmtHours(extraPortion)} extra)`:""};
+    const newLog={id:uid(),hours:h,date:logDate,note:logNote,type:extraPortion>0?"extra":"regular",extraAmount:extraPortion,extraNote:extraPortion>0?`(includes ${fmtHours(extraPortion)} extra)`:""};
     const updatedChapter = {
       ...chapter,
       completedHours: newCompleted,
@@ -1277,7 +1284,7 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
   const logExtra=useCallback(()=>{
     const h=roundToMinute(parseHours(extraH));
     if(!h||h<=0) return;
-    const newLog={id:uid(),hours:h,date:logDate,note:logNote||"Extra",type:"extra"};
+    const newLog={id:uid(),hours:h,date:logDate,note:logNote||"Extra",type:"extra",extraAmount:h};
     onUpdate({...chapter,completedHours:roundToMinute(chapter.completedHours+h),extraHours:roundToMinute((chapter.extraHours||0)+h),hourLogs:[...logs,newLog]});
     setExtraH("");setLogNote("");
   },[extraH,logDate,logNote,chapter,logs,onUpdate]);
@@ -1285,7 +1292,7 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
   const deleteLog=useCallback(logId=>{
     const log=logs.find(l=>l.id===logId);
     if(!log||!window.confirm(`Remove ${fmtHours(log.hours)} on ${fmtDate(log.date)}?`)) return;
-    onUpdate({...chapter,completedHours:roundToMinute(Math.max(0,chapter.completedHours-log.hours)),extraHours:log.type==="extra"?roundToMinute(Math.max(0,(chapter.extraHours||0)-log.hours)):chapter.extraHours,hourLogs:logs.filter(l=>l.id!==logId)});
+    onUpdate({...chapter,completedHours:roundToMinute(Math.max(0,chapter.completedHours-log.hours)),extraHours:roundToMinute(Math.max(0,(chapter.extraHours||0)-(log.extraAmount!=null?log.extraAmount:(log.type==="extra"?log.hours:0)))),hourLogs:logs.filter(l=>l.id!==logId)});
   },[logs,chapter,onUpdate]);
 
   const saveEditLog=useCallback(()=>{
@@ -1294,7 +1301,9 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
     if(!old) return;
     const newH=roundToMinute(parseHours(editLog.hours));
     const diff=newH-old.hours;
-    onUpdate({...chapter,completedHours:roundToMinute(Math.max(0,chapter.completedHours+diff)),extraHours:old.type==="extra"?roundToMinute(Math.max(0,(chapter.extraHours||0)+diff)):chapter.extraHours,hourLogs:logs.map(l=>l.id===editLog.id?{...l,hours:newH,date:editLog.date,note:editLog.note}:l)});
+    const oldExtra=old.extraAmount!=null?old.extraAmount:(old.type==="extra"?old.hours:0);
+    const newExtra=old.hours>0?roundToMinute(oldExtra*(newH/old.hours)):0;
+    onUpdate({...chapter,completedHours:roundToMinute(Math.max(0,chapter.completedHours+diff)),extraHours:roundToMinute(Math.max(0,(chapter.extraHours||0)+(newExtra-oldExtra))),hourLogs:logs.map(l=>l.id===editLog.id?{...l,hours:newH,date:editLog.date,note:editLog.note,extraAmount:newExtra,type:newExtra>0?"extra":"regular"}:l)});
     setEditLog(null);
   },[editLog,logs,chapter,onUpdate]);
 
@@ -1490,20 +1499,22 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
 // ── Bottom Nav ────────────────────────────────────────────────────
 function BottomNav({active,onChange}) {
   const tabs=[
-    {id:"home",icon:"🏠",label:"Home"},
-    {id:"batches",icon:"🗂️",label:"Batches"},
-    {id:"chapters",icon:"📚",label:"Chapters"},
-    {id:"profile",icon:"👤",label:"Profile"},
+    {id:"home",Icon:HomeIcon,label:"Home"},
+    {id:"batches",Icon:FolderKanban,label:"Batches"},
+    {id:"chapters",Icon:BookOpen,label:"Chapters"},
+    {id:"profile",Icon:UserIcon,label:"Profile"},
   ];
   return(
     <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"1px solid #f1f5f9",display:"flex",zIndex:100,boxShadow:"0 -4px 24px rgba(0,0,0,.08)"}}>
       {tabs.map(t=>{
         const isActive=active===t.id;
+        const {Icon}=t;
         return(
-          <button key={t.id} onClick={()=>onChange(t.id)} style={{flex:1,padding:"10px 0 8px",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-            <div style={{fontSize:22,transition:"transform .2s",transform:isActive?"scale(1.2)":"scale(1)"}}>{t.icon}</div>
+          <button key={t.id} onClick={()=>onChange(t.id)} style={{flex:1,padding:"10px 0 8px",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+            <div style={{width:40,height:28,borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",background:isActive?"#eef2ff":"transparent",transition:"background .2s"}}>
+              <Icon size={20} strokeWidth={isActive?2.4:2} color={isActive?"#6366f1":"#94a3b8"} fill={isActive?"#6366f1":"none"} fillOpacity={isActive?0.12:0}/>
+            </div>
             <div style={{fontSize:10,fontWeight:isActive?800:600,color:isActive?"#6366f1":"#94a3b8"}}>{t.label}</div>
-            {isActive&&<div style={{width:20,height:3,background:"#6366f1",borderRadius:99,marginTop:1}}/>}
           </button>
         );
       })}
@@ -1704,7 +1715,7 @@ export default function App() {
         </div>
       ):(
         <>
-          {tab==="home"&&<HomeTab chapters={batchChapters} profile={profile} onOpenChapter={id=>setDetailId(id)} onOpenBatch={b=>setBatchView(b)} syncStatus={syncStatus}/>}
+          {tab==="home"&&<HomeTab chapters={batchChapters} profile={profile} onOpenChapter={id=>setDetailId(id)} onOpenBatch={b=>setBatchView(b)} syncStatus={syncStatus} onGoProfile={()=>setTab("profile")}/>}
           {tab==="batches"&&<BatchesTab chapters={batchChapters} onOpenBatch={b=>setBatchView(b)} onDeleteBatch={deleteBatch} onAddBatch={()=>setAddBatchOpen(true)}/>}
           {tab==="chapters"&&<ChaptersTab masterChapters={masterChapters} onOpenMaster={c=>setEditMaster(c)} onAddMaster={()=>setAddMasterOpen(true)} onDeleteMaster={deleteMasterChapter}/>}
           {tab==="profile"&&<ProfileTab profile={profile} chapters={batchChapters} onLogout={logout} onUpdateProfile={p=>setProfile(p)}/>}
