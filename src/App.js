@@ -89,6 +89,153 @@ function buildCSV(chapters) {
   return rows.map(r=>r.map(v=>`"${v}"`).join(",")).join("\n");
 }
 
+// ── NEW: Date/Month/Week history helpers (for hour history + share) ──
+function monthKey(d) { const dt=new Date(d); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`; }
+function monthLabel(key) { if(!key) return ""; const [y,m]=key.split("-"); return new Date(Number(y),Number(m)-1,1).toLocaleDateString("en-IN",{month:"long",year:"numeric"}); }
+
+function collectBatchLogs(chapters) {
+  const all=[];
+  chapters.forEach(c=>{ (c.hourLogs||[]).forEach(l=>{ all.push({...l,chapterName:c.name}); }); });
+  return all.sort((a,b)=>new Date(a.date)-new Date(b.date));
+}
+
+function groupByDate(logs) {
+  const map={};
+  logs.forEach(l=>{ map[l.date]=(map[l.date]||0)+l.hours; });
+  return Object.entries(map).sort((a,b)=>new Date(b[0])-new Date(a[0]));
+}
+
+function monthlyTotals(chapters, mKey) {
+  let taken=0, extra=0;
+  chapters.forEach(c=>{
+    (c.hourLogs||[]).forEach(l=>{
+      if(monthKey(l.date)===mKey){ taken+=l.hours; if(l.type==="extra") extra+=l.hours; }
+    });
+  });
+  return {taken:roundToMinute(taken), extra:roundToMinute(extra)};
+}
+
+function buildBatchHistoryCSV(batchCode, chapters) {
+  const total = chapters.reduce((s,c)=>s+c.totalHours,0);
+  const logs = collectBatchLogs(chapters);
+  const byDateAsc = [...groupByDate(logs)].reverse();
+  let cumulative = 0;
+  const rows = [["Date","Hours Taken","Allotted","Remaining","Progress %"]];
+  byDateAsc.forEach(([date,hrs])=>{
+    cumulative += hrs;
+    const remaining = Math.max(0, total - cumulative);
+    const pct = total>0 ? ((cumulative/total)*100).toFixed(1)+"%" : "0%";
+    rows.push([fmtDate(date), fmtHours(hrs), fmtHours(total), fmtHours(remaining), pct]);
+  });
+  return rows.map(r=>r.map(v=>`"${v}"`).join(",")).join("\n");
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+// ── NEW: Generate a shareable PNG report card + native share / CSV fallback ──
+async function shareBatchImage(batchCode, color, chapters) {
+  const total = chapters.reduce((s,c)=>s+c.totalHours,0);
+  const done = chapters.reduce((s,c)=>s+c.completedHours,0);
+  const remaining = Math.max(0, total-done);
+  const pct = total>0 ? (done/total)*100 : 0;
+  const logs = collectBatchLogs(chapters);
+  const byDateDesc = groupByDate(logs).slice(0,10);
+  const fullByDateAsc = [...groupByDate(logs)].reverse();
+  const cumMap = {}; let running=0;
+  fullByDateAsc.forEach(([d,h])=>{ running+=h; cumMap[d]=running; });
+
+  const W=720, headerH=280, rowH=42;
+  const H = headerH + 70 + Math.max(1,byDateDesc.length)*rowH + 40;
+  const canvas=document.createElement("canvas");
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext("2d");
+
+  ctx.fillStyle="#f8fafc"; ctx.fillRect(0,0,W,H);
+  const grad=ctx.createLinearGradient(0,0,W,headerH);
+  grad.addColorStop(0,color); grad.addColorStop(1,"#4338ca");
+  ctx.fillStyle=grad; ctx.fillRect(0,0,W,headerH);
+
+  ctx.fillStyle="#ffffff";
+  ctx.font="900 38px Sora, sans-serif";
+  ctx.fillText(`${batchCode} — Hours Report`,32,56);
+  ctx.font="600 15px Sora, sans-serif";
+  ctx.globalAlpha=.8;
+  ctx.fillText(`Generated ${fmtDate(todayStr())} · LectureTrack`,32,84);
+  ctx.globalAlpha=1;
+
+  const stats=[["Allotted",fmtHours(total)],["Taken",fmtHours(done)],["Remaining",fmtHours(remaining)],["Progress",pct.toFixed(0)+"%"]];
+  const boxW=(W-64-3*16)/4;
+  stats.forEach((s,i)=>{
+    const x=32+i*(boxW+16);
+    ctx.fillStyle="rgba(255,255,255,.18)";
+    roundRect(ctx,x,112,boxW,88,14); ctx.fill();
+    ctx.fillStyle="#fff";
+    ctx.font="900 21px Sora, sans-serif";
+    ctx.fillText(s[1],x+14,155);
+    ctx.font="600 12px Sora, sans-serif";
+    ctx.globalAlpha=.75;
+    ctx.fillText(s[0],x+14,175);
+    ctx.globalAlpha=1;
+  });
+
+  ctx.fillStyle="rgba(255,255,255,.25)";
+  roundRect(ctx,32,222,W-64,10,5); ctx.fill();
+  ctx.fillStyle="#fff";
+  roundRect(ctx,32,222,Math.max(6,(W-64)*Math.min(pct,100)/100),10,5); ctx.fill();
+
+  let y=headerH+36;
+  ctx.fillStyle="#0f172a";
+  ctx.font="800 18px Sora, sans-serif";
+  ctx.fillText("Date-wise Breakdown",32,y);
+  y+=28;
+  ctx.font="700 12px Sora, sans-serif";
+  ctx.fillStyle="#94a3b8";
+  const colW=(W-64)/5;
+  ["Date","Taken","Allotted","Remaining","%"].forEach((h,i)=>ctx.fillText(h,32+i*colW,y));
+  y+=12;
+  ctx.strokeStyle="#e2e8f0"; ctx.beginPath(); ctx.moveTo(32,y); ctx.lineTo(W-32,y); ctx.stroke();
+  y+=26;
+
+  if(byDateDesc.length===0){
+    ctx.fillStyle="#94a3b8"; ctx.font="600 13px Sora, sans-serif";
+    ctx.fillText("No hours logged yet",32,y);
+  }
+  byDateDesc.forEach(([date,hrs])=>{
+    const cum=cumMap[date]||0;
+    const rem=Math.max(0,total-cum);
+    const p= total>0 ? ((cum/total)*100).toFixed(0)+"%" : "0%";
+    ctx.fillStyle="#1e293b"; ctx.font="600 13px Sora, sans-serif";
+    [fmtDate(date),fmtHours(hrs),fmtHours(total),fmtHours(rem),p].forEach((c,i)=>ctx.fillText(c,32+i*colW,y));
+    y+=rowH-16;
+    ctx.strokeStyle="#f1f5f9"; ctx.beginPath(); ctx.moveTo(32,y-8); ctx.lineTo(W-32,y-8); ctx.stroke();
+    y+=16;
+  });
+
+  return new Promise(resolve=>{
+    canvas.toBlob(async blob=>{
+      if(!blob){ resolve(); return; }
+      const file=new File([blob],`${batchCode}_hours.png`,{type:"image/png"});
+      try{
+        if(navigator.canShare && navigator.canShare({files:[file]})){
+          await navigator.share({files:[file],title:`${batchCode} Hours Report`,text:`Hours report for ${batchCode}`});
+        } else {
+          const a=document.createElement("a");
+          a.href=URL.createObjectURL(blob); a.download=`${batchCode}_hours.png`; a.click();
+        }
+      }catch(e){ /* share cancelled by user — ignore */ }
+      resolve();
+    },"image/png");
+  });
+}
+
 const MASTER = "__MASTER__";
 
 function toRow(teacherCode,c) {
@@ -595,61 +742,100 @@ function AddChapterMasterModal({onSave,onClose,subject}) {
 function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus}) {
   const batchChapters=chapters.filter(c=>c.batchCode);
   const totalAllotted=batchChapters.reduce((s,c)=>s+c.totalHours,0);
-  const totalDone=batchChapters.reduce((s,c)=>s+c.completedHours,0);
-  const totalExtra=batchChapters.reduce((s,c)=>s+(c.extraHours||0),0);
-  const pct=totalAllotted>0?(totalDone/totalAllotted)*100:0;
+  const totalDoneAllTime=batchChapters.reduce((s,c)=>s+c.completedHours,0);
+  const pctAllTime=totalAllotted>0?(totalDoneAllTime/totalAllotted)*100:0;
   const hr=new Date().getHours();
-  const gw=hr<12?"Good Morning ☀️":hr<17?"Good Afternoon 🌤️":"Good Evening 🌙";
+  const gw=hr<12?"Good Morning":hr<17?"Good Afternoon":"Good Evening";
+  const wave=hr<12?"☀️":hr<17?"🌤️":"🌙";
   const sal=profile.gender==="male"?"Sir":"Ma'am";
   const emoji=SUBJECT_EMOJI[profile.subject]||"📖";
   const batches=[...new Set(batchChapters.map(c=>c.batchCode))].sort();
 
+  // NEW: monthly hours-taken view — data already existed per chapter (hourLogs), just aggregated here
+  const allLogs=useMemo(()=>collectBatchLogs(batchChapters),[batchChapters]);
+  const availableMonths=useMemo(()=>{
+    const set=new Set(allLogs.map(l=>monthKey(l.date)));
+    set.add(monthKey(todayStr()));
+    return [...set].sort().reverse();
+  },[allLogs]);
+  const [selMonth,setSelMonth]=useState(monthKey(todayStr()));
+  const {taken:monthTaken,extra:monthExtra}=useMemo(()=>monthlyTotals(batchChapters,selMonth),[batchChapters,selMonth]);
+
   return(
     <div style={{padding:"0 0 20px"}}>
-      <div style={{background:"linear-gradient(135deg,#4f46e5 0%,#7c3aed 60%,#6366f1 100%)",padding:"28px 20px 24px",color:"#fff",position:"relative",overflow:"hidden",borderRadius:"0 0 28px 28px"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+      <div style={{padding:"20px 16px 0"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <div>
-            <div style={{fontSize:13,opacity:.75,fontWeight:500}}>{gw},</div>
-            <div style={{fontSize:24,fontWeight:900,letterSpacing:"-.5px",marginTop:2}}>{profile.code} {sal} 👋</div>
-            <div style={{fontSize:12,opacity:.6,marginTop:2}}>{profile.name} · {emoji} {profile.subject||"Teacher"}</div>
+            <div style={{fontSize:19,fontWeight:900,color:"#0f172a"}}>{gw}, {profile.code} {sal} {wave}</div>
+            <div style={{fontSize:12,color:"#94a3b8",marginTop:2,fontWeight:600}}>{profile.name} · {emoji} {profile.subject||"Teacher"}</div>
           </div>
-          {syncStatus&&<SyncBadge status={syncStatus}/>}
-        </div>
-        <div style={{display:"flex",gap:10,marginBottom:16}}>
-          {[{label:"Total Taken",val:fmtHours(totalDone),icon:"⏱️"},{label:"Allotted",val:fmtHours(totalAllotted),icon:"📋"},{label:"Extra",val:fmtHours(totalExtra),icon:"⭐"}].map(s=>(
-            <div key={s.label} style={{flex:1,background:"rgba(255,255,255,.15)",borderRadius:14,padding:"10px 8px",textAlign:"center"}}>
-              <div style={{fontSize:16,marginBottom:2}}>{s.icon}</div>
-              <div style={{fontSize:15,fontWeight:900}}>{s.val}</div>
-              <div style={{fontSize:9,opacity:.75,fontWeight:600,marginTop:1}}>{s.label}</div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {syncStatus&&<SyncBadge status={syncStatus}/>}
+            <div style={{width:38,height:38,borderRadius:"50%",background:"#eef2ff",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"2px solid #e0e7ff",flexShrink:0}}>
+              {profile.photo?<img src={profile.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:16}}>🔔</span>}
             </div>
-          ))}
-        </div>
-        <PBar pct={pct}/>
-        <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,opacity:.8,fontWeight:600}}>
-          <span>{pct.toFixed(0)}% overall progress</span>
-          <span>{batchChapters.length} chapters · {batches.length} batches</span>
+          </div>
         </div>
       </div>
 
-      <div style={{padding:"20px 16px 0"}}>
+      <div style={{margin:"0 16px 20px",background:"linear-gradient(135deg,#4f46e5 0%,#7c3aed 60%,#6366f1 100%)",borderRadius:24,padding:"22px 20px",color:"#fff",boxShadow:"0 10px 30px rgba(79,70,229,.25)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <div>
+            <div style={{fontSize:12,opacity:.7,fontWeight:600}}>Overview</div>
+            <div style={{fontSize:19,fontWeight:900}}>This Month</div>
+          </div>
+          <select value={selMonth} onChange={e=>setSelMonth(e.target.value)}
+            style={{background:"rgba(255,255,255,.2)",color:"#fff",border:"none",borderRadius:99,padding:"7px 14px",fontWeight:700,fontSize:12,fontFamily:"inherit",outline:"none"}}>
+            {availableMonths.map(m=><option key={m} value={m} style={{color:"#0f172a"}}>{monthLabel(m)}</option>)}
+          </select>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+          {[
+            {label:"Hours Taken",val:fmtHours(monthTaken),icon:"⏱️"},
+            {label:"Allotted (Total)",val:fmtHours(totalAllotted),icon:"📋"},
+            {label:"Extra Hours",val:fmtHours(monthExtra),icon:"⭐"},
+            {label:"Overall Progress",val:pctAllTime.toFixed(0)+"%",icon:"📈"},
+          ].map(s=>(
+            <div key={s.label} style={{background:"rgba(255,255,255,.15)",borderRadius:16,padding:"12px 14px"}}>
+              <div style={{fontSize:16,marginBottom:4}}>{s.icon}</div>
+              <div style={{fontSize:17,fontWeight:900}}>{s.val}</div>
+              <div style={{fontSize:10,opacity:.75,fontWeight:600,marginTop:2}}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+        <PBar pct={pctAllTime}/>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,opacity:.8,fontWeight:600}}>
+          <span>{batchChapters.length} chapters · {batches.length} batches</span>
+          <span>{pctAllTime.toFixed(0)}% completed</span>
+        </div>
+      </div>
+
+      <div style={{padding:"0 16px"}}>
         {batches.length>0&&(
           <div style={{marginBottom:20}}>
             <div style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:10}}>🗂️ Your Batches</div>
-            <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:4,scrollbarWidth:"none"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {batches.map((b,i)=>{
                 const bc=BATCH_COLORS[i%BATCH_COLORS.length];
                 const chs=batchChapters.filter(c=>c.batchCode===b);
                 const done=chs.reduce((s,c)=>s+c.completedHours,0);
                 const total=chs.reduce((s,c)=>s+c.totalHours,0);
                 const p=total>0?(done/total)*100:0;
+                const completed=p>=100;
                 return(
-                  <div key={b} onClick={()=>onOpenBatch(b)} style={{flexShrink:0,background:`linear-gradient(135deg,${bc},${bc}cc)`,borderRadius:16,padding:"12px 16px",color:"#fff",cursor:"pointer",minWidth:110,boxShadow:`0 4px 16px ${bc}44`}}>
-                    <div style={{fontSize:20,fontWeight:900,marginBottom:2}}>{b}</div>
-                    <div style={{fontSize:11,opacity:.8}}>{chs.length} chapters</div>
-                    <div style={{background:"rgba(255,255,255,.25)",borderRadius:99,height:4,marginTop:8}}>
-                      <div style={{width:`${Math.min(p,100)}%`,height:"100%",background:"#fff",borderRadius:99}}/>
+                  <div key={b} onClick={()=>onOpenBatch(b)} style={{background:"#fff",borderRadius:16,padding:"14px 16px",cursor:"pointer",borderLeft:`4px solid ${bc}`,boxShadow:"0 1px 8px rgba(0,0,0,.06)",display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:8}}>
+                        <div style={{fontSize:17,fontWeight:900,color:bc}}>{b}</div>
+                        <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:99,background:completed?"#fef3c7":"#eef2ff",color:completed?"#b45309":"#4338ca",whiteSpace:"nowrap"}}>{completed?"✓ Completed":"⏱ In Progress"}</span>
+                      </div>
+                      <div style={{fontSize:11,color:"#94a3b8",marginBottom:6}}>{chs.length} chapters</div>
+                      <div style={{background:"#f1f5f9",borderRadius:99,height:5}}>
+                        <div style={{width:`${Math.min(p,100)}%`,height:"100%",background:bc,borderRadius:99}}/>
+                      </div>
+                      <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{p.toFixed(0)}% Progress</div>
                     </div>
-                    <div style={{fontSize:10,opacity:.8,marginTop:3}}>{p.toFixed(0)}%</div>
+                    <span style={{color:"#cbd5e1",fontSize:18}}>›</span>
                   </div>
                 );
               })}
@@ -833,10 +1019,32 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
   const total=chapters.reduce((s,c)=>s+c.totalHours,0);
   const done=chapters.reduce((s,c)=>s+c.completedHours,0);
   const pct=total>0?(done/total)*100:0;
+  const [sharing,setSharing]=useState(false);
+
+  const downloadCSV=()=>{
+    const csv=buildBatchHistoryCSV(batchCode,chapters);
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+    a.download=`${batchCode}_HoursReport_${todayStr()}.csv`;
+    a.click();
+  };
+
+  const shareImage=async()=>{
+    setSharing(true);
+    try{ await shareBatchImage(batchCode,color,chapters); }
+    finally{ setSharing(false); }
+  };
+
   return(
     <div style={{minHeight:"100vh",background:"#f8fafc"}}>
       <div style={{background:`linear-gradient(135deg,${color},${color}bb)`,padding:"24px 20px 28px",color:"#fff",position:"relative",overflow:"hidden",borderRadius:"0 0 24px 24px"}}>
-        <button onClick={onBack} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:12,padding:"8px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,marginBottom:16}}>← Back</button>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <button onClick={onBack} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:12,padding:"8px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>← Back</button>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={shareImage} disabled={sharing} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:12,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:sharing?"default":"pointer",fontFamily:"inherit",fontSize:13,opacity:sharing?.7:1}}>{sharing?"…":"📤 Share"}</button>
+            <button onClick={downloadCSV} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:12,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>⬇️ CSV</button>
+          </div>
+        </div>
         <div style={{fontSize:42,fontWeight:900,letterSpacing:"-1px"}}>{batchCode}</div>
         <div style={{fontSize:13,opacity:.8,marginTop:4,marginBottom:16}}>{chapters.length} chapters</div>
         <div style={{display:"flex",gap:10,marginBottom:14}}>
@@ -851,6 +1059,7 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
         <div style={{fontSize:12,opacity:.8,marginTop:5,fontWeight:600}}>{pct.toFixed(0)}% overall progress</div>
       </div>
       <div style={{padding:"20px 16px 80px"}}>
+        <BatchHistorySection batchCode={batchCode} color={color} chapters={chapters}/>
         {chapters.map(c=>{
           const cp=c.totalHours>0?(c.completedHours/c.totalHours)*100:0;
           const topics=c.topics||[];
@@ -863,6 +1072,86 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
           style={{width:"100%",marginTop:8,padding:"14px",background:"#fff",color:"#ef4444",border:"2px solid #fecaca",borderRadius:16,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(239,68,68,.1)"}}>
           🗑️ Delete This Entire Batch
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── NEW: Monthly/weekly/date-wise hours breakdown for a batch ──────
+function BatchHistorySection({batchCode,color,chapters}) {
+  const total=chapters.reduce((s,c)=>s+c.totalHours,0);
+  const done=chapters.reduce((s,c)=>s+c.completedHours,0);
+  const remaining=Math.max(0,total-done);
+  const allLogs=useMemo(()=>collectBatchLogs(chapters),[chapters]);
+  const availableMonths=useMemo(()=>{
+    const set=new Set(allLogs.map(l=>monthKey(l.date)));
+    set.add(monthKey(todayStr()));
+    return [...set].sort().reverse();
+  },[allLogs]);
+  const [selMonth,setSelMonth]=useState(availableMonths[0]);
+  const [expandedWeek,setExpandedWeek]=useState(null);
+
+  const monthLogs=useMemo(()=>allLogs.filter(l=>monthKey(l.date)===selMonth),[allLogs,selMonth]);
+  const monthTaken=monthLogs.reduce((s,l)=>s+l.hours,0);
+  const monthExtra=monthLogs.filter(l=>l.type==="extra").reduce((s,l)=>s+l.hours,0);
+
+  const weeks=useMemo(()=>{
+    const map={};
+    monthLogs.forEach(l=>{
+      const dt=new Date(l.date);
+      const day=dt.getDay();
+      const start=new Date(dt); start.setDate(dt.getDate()-day);
+      const key=start.toISOString().split("T")[0];
+      if(!map[key]) map[key]={total:0,dates:{}};
+      map[key].total+=l.hours;
+      map[key].dates[l.date]=(map[key].dates[l.date]||0)+l.hours;
+    });
+    return Object.entries(map).sort((a,b)=>new Date(b[0])-new Date(a[0]));
+  },[monthLogs]);
+
+  if(allLogs.length===0) return null;
+
+  return(
+    <div style={{background:"#fff",borderRadius:20,padding:18,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,.06)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>📅 Hours History</div>
+        <select value={selMonth} onChange={e=>setSelMonth(e.target.value)}
+          style={{background:"#f1f5f9",border:"none",borderRadius:99,padding:"6px 12px",fontWeight:700,fontSize:12,fontFamily:"inherit",outline:"none",color:"#475569"}}>
+          {availableMonths.map(m=><option key={m} value={m}>{monthLabel(m)}</option>)}
+        </select>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
+        {[{l:"Taken",v:fmtHours(monthTaken),c:"#10b981"},{l:"Extra",v:fmtHours(monthExtra),c:"#f59e0b"},{l:"Remaining",v:fmtHours(remaining),c:"#ef4444"}].map(s=>(
+          <div key={s.l} style={{background:`${s.c}0f`,borderRadius:12,padding:"10px 6px",textAlign:"center",border:`1.5px solid ${s.c}22`}}>
+            <div style={{fontSize:14,fontWeight:900,color:s.c}}>{s.v}</div>
+            <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,marginTop:2}}>{s.l}</div>
+          </div>
+        ))}
+      </div>
+      {weeks.length===0&&<div style={{textAlign:"center",padding:"16px",color:"#94a3b8",fontSize:13}}>No hours logged in {monthLabel(selMonth)}</div>}
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {weeks.map(([weekStart,data])=>{
+          const open=expandedWeek===weekStart;
+          const dates=Object.entries(data.dates).sort((a,b)=>new Date(b[0])-new Date(a[0]));
+          return(
+            <div key={weekStart} style={{border:"1.5px solid #f1f5f9",borderRadius:12,overflow:"hidden"}}>
+              <div onClick={()=>setExpandedWeek(open?null:weekStart)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",cursor:"pointer",background:"#f8fafc"}}>
+                <span style={{fontSize:12,fontWeight:700,color:"#475569"}}>Week of {fmtDate(weekStart)}</span>
+                <span style={{fontSize:12,fontWeight:800,color}}>{fmtHours(data.total)} {open?"▲":"▼"}</span>
+              </div>
+              {open&&(
+                <div style={{padding:"6px 12px 10px"}}>
+                  {dates.map(([date,hrs])=>(
+                    <div key={date} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",fontSize:12,color:"#64748b",borderBottom:"1px solid #f8fafc"}}>
+                      <span>{fmtDate(date)}</span>
+                      <span style={{fontWeight:700,color:"#0f172a"}}>{fmtHours(hrs)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
