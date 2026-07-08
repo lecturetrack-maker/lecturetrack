@@ -1641,6 +1641,67 @@ export default function App() {
       });
   },[profile?.code]);
 
+  // NEW: live sync — listen for changes made from OTHER devices/tabs (needs Realtime
+  // enabled on the "chapters" and "teachers" tables in Supabase → Database → Replication)
+  useEffect(()=>{
+    if(!profile) return;
+    const channel=supabase.channel(`teacher-sync-${profile.code}`)
+      .on('postgres_changes',
+        {event:'*',schema:'public',table:'chapters',filter:`teacher_code=eq.${profile.code}`},
+        payload=>{
+          if(payload.eventType==='DELETE'){
+            setChapters(prev=>prev.filter(c=>c.id!==payload.old.id));
+          } else {
+            const incoming=fromRow(payload.new);
+            setChapters(prev=>{
+              const exists=prev.some(c=>c.id===incoming.id);
+              return exists ? prev.map(c=>c.id===incoming.id?incoming:c) : [...prev,incoming];
+            });
+          }
+        })
+      .on('postgres_changes',
+        {event:'UPDATE',schema:'public',table:'teachers',filter:`code=eq.${profile.code}`},
+        payload=>{
+          setProfile(prev=>{
+            if(!prev) return prev;
+            const next={...prev,photo:payload.new.photo??prev.photo,name:payload.new.name??prev.name,gender:payload.new.gender??prev.gender,subject:payload.new.subject??prev.subject};
+            if(next.photo===prev.photo && next.name===prev.name && next.gender===prev.gender && next.subject===prev.subject) return prev;
+            try{localStorage.setItem("lt_session",JSON.stringify(next));}catch{}
+            return next;
+          });
+        })
+      .subscribe();
+    return ()=>{ supabase.removeChannel(channel); };
+  },[profile?.code]);
+
+  // NEW: fallback for when Realtime isn't enabled on the Supabase project — re-pull the
+  // latest data whenever the app/tab regains focus, so switching back to it shows updates
+  useEffect(()=>{
+    if(!profile) return;
+    const refetch=()=>{
+      if(document.visibilityState && document.visibilityState!=='visible') return;
+      supabase.from("chapters").select("*").eq("teacher_code",profile.code).order("created_at")
+        .then(({data,error})=>{ if(!error&&data) setChapters(data.map(fromRow)); });
+      supabase.from("teachers").select("photo,name,gender,subject").eq("code",profile.code).single()
+        .then(({data})=>{
+          if(!data) return;
+          setProfile(prev=>{
+            if(!prev) return prev;
+            const next={...prev,photo:data.photo??prev.photo,name:data.name??prev.name,gender:data.gender??prev.gender,subject:data.subject??prev.subject};
+            if(next.photo===prev.photo && next.name===prev.name && next.gender===prev.gender && next.subject===prev.subject) return prev;
+            try{localStorage.setItem("lt_session",JSON.stringify(next));}catch{}
+            return next;
+          });
+        });
+    };
+    document.addEventListener("visibilitychange",refetch);
+    window.addEventListener("focus",refetch);
+    return ()=>{
+      document.removeEventListener("visibilitychange",refetch);
+      window.removeEventListener("focus",refetch);
+    };
+  },[profile?.code]);
+
   const syncChapter=useCallback(async chapter=>{
     if(!profile) return;
     setSyncStatus("saving");
