@@ -106,6 +106,29 @@ function groupByDate(logs) {
   return Object.entries(map).sort((a,b)=>new Date(b[0])-new Date(a[0]));
 }
 
+// ── NEW: Group logs by date AND chapter, with running cumulative total for the batch ──
+function buildDateChapterRows(logs) {
+  const dateMap = {};
+  logs.forEach(l=>{
+    if(!dateMap[l.date]) dateMap[l.date]={total:0,byChapter:{}};
+    dateMap[l.date].total += l.hours;
+    dateMap[l.date].byChapter[l.chapterName] = (dateMap[l.date].byChapter[l.chapterName]||0) + l.hours;
+  });
+  const datesAsc = Object.keys(dateMap).sort((a,b)=>new Date(a)-new Date(b));
+  let cumulative = 0;
+  const cumByDate = {};
+  datesAsc.forEach(d=>{ cumulative += dateMap[d].total; cumByDate[d] = roundToMinute(cumulative); });
+  const datesDesc = [...datesAsc].reverse();
+  const rows=[];
+  datesDesc.forEach(d=>{
+    const chapterEntries = Object.entries(dateMap[d].byChapter).sort((a,b)=>a[0].localeCompare(b[0]));
+    chapterEntries.forEach(([chapterName,hrs])=>{
+      rows.push({date:d, chapterName, hours:roundToMinute(hrs), cumulative:cumByDate[d]});
+    });
+  });
+  return rows;
+}
+
 function monthlyTotals(chapters, mKey) {
   let taken=0, extra=0;
   chapters.forEach(c=>{
@@ -119,19 +142,18 @@ function monthlyTotals(chapters, mKey) {
   return {taken:roundToMinute(taken), extra:roundToMinute(extra)};
 }
 
+// ── UPDATED: CSV now includes chapter name per row ──
 function buildBatchHistoryCSV(batchCode, chapters) {
   const total = chapters.reduce((s,c)=>s+c.totalHours,0);
   const logs = collectBatchLogs(chapters);
-  const byDateAsc = [...groupByDate(logs)].reverse();
-  let cumulative = 0;
-  const rows = [["Date","Hours Taken","Allotted","Remaining","Progress %"]];
-  byDateAsc.forEach(([date,hrs])=>{
-    cumulative += hrs;
-    const remaining = Math.max(0, total - cumulative);
-    const pct = total>0 ? ((cumulative/total)*100).toFixed(1)+"%" : "0%";
-    rows.push([fmtDate(date), fmtHours(hrs), fmtHours(total), fmtHours(remaining), pct]);
+  const rows = buildDateChapterRows(logs);
+  const out = [["Date","Chapter","Hours Taken","Allotted","Remaining","Progress %"]];
+  rows.forEach(r=>{
+    const remaining = Math.max(0, total - r.cumulative);
+    const pct = total>0 ? ((r.cumulative/total)*100).toFixed(1)+"%" : "0%";
+    out.push([fmtDate(r.date), r.chapterName, fmtHours(r.hours), fmtHours(total), fmtHours(remaining), pct]);
   });
-  return rows.map(r=>r.map(v=>`"${v}"`).join(",")).join("\n");
+  return out.map(r=>r.map(v=>`"${v}"`).join(",")).join("\n");
 }
 
 function roundRect(ctx,x,y,w,h,r){
@@ -145,19 +167,18 @@ function roundRect(ctx,x,y,w,h,r){
 }
 
 // ── NEW: Generate a shareable PNG report card + native share / CSV fallback ──
+// UPDATED: date-wise breakdown now includes the Chapter column
 async function shareBatchImage(batchCode, color, chapters) {
   const total = chapters.reduce((s,c)=>s+c.totalHours,0);
   const done = chapters.reduce((s,c)=>s+c.completedHours,0);
   const remaining = Math.max(0, total-done);
   const pct = total>0 ? (done/total)*100 : 0;
   const logs = collectBatchLogs(chapters);
-  const byDateDesc = groupByDate(logs).slice(0,10);
-  const fullByDateAsc = [...groupByDate(logs)].reverse();
-  const cumMap = {}; let running=0;
-  fullByDateAsc.forEach(([d,h])=>{ running+=h; cumMap[d]=running; });
+  const allRows = buildDateChapterRows(logs);
+  const rows = allRows.slice(0,10);
 
-  const W=720, headerH=280, rowH=42;
-  const H = headerH + 70 + Math.max(1,byDateDesc.length)*rowH + 40;
+  const W=760, headerH=280, rowH=42;
+  const H = headerH + 70 + Math.max(1,rows.length)*rowH + 40;
   const canvas=document.createElement("canvas");
   canvas.width=W; canvas.height=H;
   const ctx=canvas.getContext("2d");
@@ -202,22 +223,28 @@ async function shareBatchImage(batchCode, color, chapters) {
   y+=28;
   ctx.font="700 12px Sora, sans-serif";
   ctx.fillStyle="#94a3b8";
-  const colW=(W-64)/5;
-  ["Date","Taken","Allotted","Remaining","%"].forEach((h,i)=>ctx.fillText(h,32+i*colW,y));
+  // 5 columns: Date, Chapter, Taken, Remaining, %
+  const colWidths=[0.22,0.36,0.16,0.16,0.10].map(f=>(W-64)*f);
+  const colX=[32];
+  for(let i=0;i<colWidths.length-1;i++) colX.push(colX[i]+colWidths[i]);
+  ["Date","Chapter","Taken","Remaining","%"].forEach((h,i)=>ctx.fillText(h,colX[i],y));
   y+=12;
   ctx.strokeStyle="#e2e8f0"; ctx.beginPath(); ctx.moveTo(32,y); ctx.lineTo(W-32,y); ctx.stroke();
   y+=26;
 
-  if(byDateDesc.length===0){
+  if(rows.length===0){
     ctx.fillStyle="#94a3b8"; ctx.font="600 13px Sora, sans-serif";
     ctx.fillText("No hours logged yet",32,y);
   }
-  byDateDesc.forEach(([date,hrs])=>{
-    const cum=cumMap[date]||0;
-    const rem=Math.max(0,total-cum);
-    const p= total>0 ? ((cum/total)*100).toFixed(0)+"%" : "0%";
+  const truncate=(str,max)=>{
+    if(!str) return "";
+    return str.length>max ? str.slice(0,max-1)+"…" : str;
+  };
+  rows.forEach(r=>{
+    const rem=Math.max(0,total-r.cumulative);
+    const p= total>0 ? ((r.cumulative/total)*100).toFixed(0)+"%" : "0%";
     ctx.fillStyle="#1e293b"; ctx.font="600 13px Sora, sans-serif";
-    [fmtDate(date),fmtHours(hrs),fmtHours(total),fmtHours(rem),p].forEach((c,i)=>ctx.fillText(c,32+i*colW,y));
+    [fmtDate(r.date), truncate(r.chapterName,22), fmtHours(r.hours), fmtHours(rem), p].forEach((c,i)=>ctx.fillText(c,colX[i],y));
     y+=rowH-16;
     ctx.strokeStyle="#f1f5f9"; ctx.beginPath(); ctx.moveTo(32,y-8); ctx.lineTo(W-32,y-8); ctx.stroke();
     y+=16;
@@ -743,7 +770,8 @@ function AddChapterMasterModal({onSave,onClose,subject}) {
 }
 
 // ── Home Tab ──────────────────────────────────────────────────────
-function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProfile}) {
+// UPDATED: accepts completedBatches so the batch list on the front page only shows running batches
+function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProfile,completedBatches=[]}) {
   const batchChapters=chapters.filter(c=>c.batchCode);
   const totalAllotted=batchChapters.reduce((s,c)=>s+c.totalHours,0);
   const totalDoneAllTime=batchChapters.reduce((s,c)=>s+c.completedHours,0);
@@ -753,7 +781,9 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
   const wave=hr<12?"☀️":hr<17?"🌤️":"🌙";
   const sal=profile.gender==="male"?"Sir":"Ma'am";
   const emoji=SUBJECT_EMOJI[profile.subject]||"📖";
-  const batches=[...new Set(batchChapters.map(c=>c.batchCode))].sort();
+  const allBatches=[...new Set(batchChapters.map(c=>c.batchCode))].sort();
+  // Only show currently running (not completed) batches on the front page
+  const batches=allBatches.filter(b=>!completedBatches.includes(b));
 
   // NEW: monthly hours-taken view — data already existed per chapter (hourLogs), just aggregated here
   const allLogs=useMemo(()=>collectBatchLogs(batchChapters),[batchChapters]);
@@ -823,7 +853,7 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
             <div style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:10}}>🗂️ Your Batches</div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {batches.map((b,i)=>{
-                const bc=BATCH_COLORS[i%BATCH_COLORS.length];
+                const bc=BATCH_COLORS[allBatches.indexOf(b)%BATCH_COLORS.length];
                 const chs=batchChapters.filter(c=>c.batchCode===b);
                 const done=chs.reduce((s,c)=>s+c.completedHours,0);
                 const total=chs.reduce((s,c)=>s+c.totalHours,0);
@@ -855,6 +885,14 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
             <div style={{fontSize:56,marginBottom:16}}>📭</div>
             <div style={{fontWeight:800,fontSize:18,color:"#475569",marginBottom:8}}>No batches yet</div>
             <div style={{fontSize:14}}>Go to Batches tab to add your first batch</div>
+          </div>
+        )}
+
+        {batchChapters.length>0&&batches.length===0&&(
+          <div style={{textAlign:"center",padding:"50px 20px",color:"#94a3b8"}}>
+            <div style={{fontSize:48,marginBottom:14}}>🎉</div>
+            <div style={{fontWeight:800,fontSize:16,color:"#475569",marginBottom:6}}>All batches completed!</div>
+            <div style={{fontSize:13}}>Check the Batches tab to view or reopen them</div>
           </div>
         )}
       </div>
@@ -902,7 +940,8 @@ function ChaptersTab({masterChapters,onOpenMaster,onAddMaster,onDeleteMaster}) {
 }
 
 // ── Batches Tab ───────────────────────────────────────────────────
-function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatch}) {
+// UPDATED: shows a "Completed" tag on batches that have been marked completed
+function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatch,completedBatches=[]}) {
   const batches=[...new Set(chapters.filter(c=>c.batchCode).map(c=>c.batchCode))].sort();
   return(
     <div style={{padding:"20px 16px 20px"}}>
@@ -918,12 +957,16 @@ function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatch}) {
           const done=chs.reduce((s,c)=>s+c.completedHours,0);
           const total=chs.reduce((s,c)=>s+c.totalHours,0);
           const p=total>0?(done/total)*100:0;
+          const isCompleted=completedBatches.includes(b);
           return(
             <div key={b} onClick={()=>onOpenBatch(b)} style={{background:`linear-gradient(135deg,${bc},${bc}cc)`,borderRadius:20,padding:22,color:"#fff",cursor:"pointer",boxShadow:`0 6px 24px ${bc}44`,transition:"transform .2s",position:"relative",overflow:"hidden"}}
               onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"}
               onMouseLeave={e=>e.currentTarget.style.transform="none"}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                <div style={{fontSize:38,fontWeight:900,letterSpacing:"-1px"}}>{b}</div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{fontSize:38,fontWeight:900,letterSpacing:"-1px"}}>{b}</div>
+                  {isCompleted&&<span style={{fontSize:10,fontWeight:800,padding:"4px 10px",borderRadius:99,background:"rgba(255,255,255,.3)",whiteSpace:"nowrap"}}>✅ Completed</span>}
+                </div>
                 <button onClick={e=>{e.stopPropagation();onDeleteBatch(b);}} style={{background:"rgba(239,68,68,.3)",border:"none",borderRadius:10,padding:"7px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>🗑️ Delete</button>
               </div>
               <div style={{fontSize:13,opacity:.8,marginBottom:14}}>{chs.length} chapters</div>
@@ -1022,7 +1065,9 @@ function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
 }
 
 // ── Batch Page ────────────────────────────────────────────────────
-function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapter,onEditChapter,onOpenChapter,onDeleteBatch}) {
+// UPDATED: accepts `completed` + `onToggleCompleted` and renders a "Mark Completed" button
+// beside "Delete This Entire Batch" — both buttons are equal size (flex:1 in a row)
+function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapter,onEditChapter,onOpenChapter,onDeleteBatch,completed,onToggleCompleted}) {
   const total=chapters.reduce((s,c)=>s+c.totalHours,0);
   const done=chapters.reduce((s,c)=>s+c.completedHours,0);
   const pct=total>0?(done/total)*100:0;
@@ -1052,7 +1097,10 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
             <button onClick={downloadCSV} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:12,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>⬇️ CSV</button>
           </div>
         </div>
-        <div style={{fontSize:42,fontWeight:900,letterSpacing:"-1px"}}>{batchCode}</div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{fontSize:42,fontWeight:900,letterSpacing:"-1px"}}>{batchCode}</div>
+          {completed&&<span style={{fontSize:11,fontWeight:800,padding:"5px 12px",borderRadius:99,background:"rgba(255,255,255,.28)",whiteSpace:"nowrap"}}>✅ Completed</span>}
+        </div>
         <div style={{fontSize:13,opacity:.8,marginTop:4,marginBottom:16}}>{chapters.length} chapters</div>
         <div style={{display:"flex",gap:10,marginBottom:14}}>
           {[{l:"Allotted",v:fmtHours(total)},{l:"Completed",v:fmtHours(done)},{l:"Remaining",v:fmtHours(Math.max(0,total-done))}].map(s=>(
@@ -1075,10 +1123,16 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
               onOpen={()=>onOpenChapter(c.id)} onEdit={()=>onEditChapter(c)} onDelete={()=>onDeleteChapter(c.id)}/>
           );
         })}
-        <button onClick={onDeleteBatch}
-          style={{width:"100%",marginTop:8,padding:"14px",background:"#fff",color:"#ef4444",border:"2px solid #fecaca",borderRadius:16,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(239,68,68,.1)"}}>
-          🗑️ Delete This Entire Batch
-        </button>
+        <div style={{display:"flex",gap:10,marginTop:8}}>
+          <button onClick={onToggleCompleted}
+            style={{flex:1,padding:"14px",background:completed?"#f1f5f9":"#fff",color:completed?"#475569":"#10b981",border:`2px solid ${completed?"#e2e8f0":"#bbf7d0"}`,borderRadius:16,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:completed?"none":"0 2px 8px rgba(16,185,129,.1)"}}>
+            {completed?"↩️ Mark as Running":"✅ Chapter Completed"}
+          </button>
+          <button onClick={onDeleteBatch}
+            style={{flex:1,padding:"14px",background:"#fff",color:"#ef4444",border:"2px solid #fecaca",borderRadius:16,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(239,68,68,.1)"}}>
+            🗑️ Delete This Entire Batch
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1538,8 +1592,29 @@ export default function App() {
   const [batchView,setBatchView]=useState(null);
   const congratsShown=useRef(false);
   const [showCongrats,setShowCongrats]=useState(false);
+  // NEW: tracks which batch codes have been marked "Completed" so they can be hidden from the Home tab
+  const [completedBatches,setCompletedBatches]=useState([]);
 
   useEffect(()=>{const t=setTimeout(()=>setSplashDone(true),2200);return()=>clearTimeout(t);},[]);
+
+  // NEW: load the completed-batches list for this teacher from localStorage
+  useEffect(()=>{
+    if(!profile){setCompletedBatches([]);return;}
+    try{
+      const stored=localStorage.getItem(`lt_completed_${profile.code}`);
+      setCompletedBatches(stored?JSON.parse(stored):[]);
+    }catch{setCompletedBatches([]);}
+  },[profile?.code]);
+
+  // NEW: toggle a batch's completed status and persist it
+  const toggleBatchCompleted=useCallback((batchCode)=>{
+    setCompletedBatches(prev=>{
+      const isCompleted=prev.includes(batchCode);
+      const next=isCompleted?prev.filter(b=>b!==batchCode):[...prev,batchCode];
+      try{if(profile) localStorage.setItem(`lt_completed_${profile.code}`,JSON.stringify(next));}catch{}
+      return next;
+    });
+  },[profile]);
 
   useEffect(()=>{
     if(!profile) return;
@@ -1649,6 +1724,12 @@ export default function App() {
     const toDelete=chapters.filter(c=>c.batchCode===batchCode);
     setChapters(prev=>prev.filter(c=>c.batchCode!==batchCode));
     for(const c of toDelete) await supabase.from("chapters").delete().eq("id",c.id);
+    // NEW: also clean up the completed-batches list if this batch was marked completed
+    setCompletedBatches(prev=>{
+      const next=prev.filter(b=>b!==batchCode);
+      try{if(profile) localStorage.setItem(`lt_completed_${profile.code}`,JSON.stringify(next));}catch{}
+      return next;
+    });
     setBatchView(null);
   };
 
@@ -1694,7 +1775,9 @@ export default function App() {
       <BatchPage batchCode={batchView} color={getBatchColor(batchView)} chapters={bChs} masterChapters={masterChapters}
         onBack={()=>setBatchView(null)} onDeleteChapter={deleteChapter}
         onEditChapter={c=>setEditChapter(c)} onOpenChapter={id=>setDetailId(id)}
-        onDeleteBatch={()=>deleteBatch(batchView)}/>
+        onDeleteBatch={()=>deleteBatch(batchView)}
+        completed={completedBatches.includes(batchView)}
+        onToggleCompleted={()=>toggleBatchCompleted(batchView)}/>
       {editChapter&&(
         <Modal title="✏️ Edit Chapter" onClose={()=>setEditChapter(null)}>
           <EditChapterForm chapter={editChapter} onSave={editBatchChapterSave} onClose={()=>setEditChapter(null)}/>
@@ -1715,8 +1798,8 @@ export default function App() {
         </div>
       ):(
         <>
-          {tab==="home"&&<HomeTab chapters={batchChapters} profile={profile} onOpenChapter={id=>setDetailId(id)} onOpenBatch={b=>setBatchView(b)} syncStatus={syncStatus} onGoProfile={()=>setTab("profile")}/>}
-          {tab==="batches"&&<BatchesTab chapters={batchChapters} onOpenBatch={b=>setBatchView(b)} onDeleteBatch={deleteBatch} onAddBatch={()=>setAddBatchOpen(true)}/>}
+          {tab==="home"&&<HomeTab chapters={batchChapters} profile={profile} onOpenChapter={id=>setDetailId(id)} onOpenBatch={b=>setBatchView(b)} syncStatus={syncStatus} onGoProfile={()=>setTab("profile")} completedBatches={completedBatches}/>}
+          {tab==="batches"&&<BatchesTab chapters={batchChapters} onOpenBatch={b=>setBatchView(b)} onDeleteBatch={deleteBatch} onAddBatch={()=>setAddBatchOpen(true)} completedBatches={completedBatches}/>}
           {tab==="chapters"&&<ChaptersTab masterChapters={masterChapters} onOpenMaster={c=>setEditMaster(c)} onAddMaster={()=>setAddMasterOpen(true)} onDeleteMaster={deleteMasterChapter}/>}
           {tab==="profile"&&<ProfileTab profile={profile} chapters={batchChapters} onLogout={logout} onUpdateProfile={p=>setProfile(p)}/>}
         </>
