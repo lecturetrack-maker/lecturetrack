@@ -42,6 +42,16 @@ function parseHours(val) {
 
 function roundToMinute(h) { return Math.round(h*60)/60; }
 
+// NEW: converts a raw log-entry value to decimal hours depending on the chosen unit,
+// so people can log "20" minutes or "1.5" hours and the app always stores/reports correct decimal hours.
+function toHoursFromInput(raw, unit) {
+  if (unit === "minutes") {
+    const n = parseFloat(raw);
+    return isNaN(n) ? 0 : n / 60;
+  }
+  return parseHours(raw);
+}
+
 function getStatus(completed,total) {
   if (!total) return "none";
   const p=(completed/total)*100;
@@ -779,7 +789,6 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
   const hr=new Date().getHours();
   const gw=hr<12?"Good Morning":hr<17?"Good Afternoon":"Good Evening";
   const wave=hr<12?"☀️":hr<17?"🌤️":"🌙";
-  const sal=profile.gender==="male"?"Sir":"Ma'am";
   const emoji=SUBJECT_EMOJI[profile.subject]||"📖";
   const allBatches=[...new Set(batchChapters.map(c=>c.batchCode))].sort();
   // Only show currently running (not completed) batches on the front page
@@ -800,7 +809,7 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
       <div style={{padding:"20px 16px 0"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <div>
-            <div style={{fontSize:19,fontWeight:900,color:"#0f172a"}}>{gw}, {profile.code} {sal} {wave}</div>
+            <div style={{fontSize:19,fontWeight:900,color:"#0f172a"}}>{gw}, {profile.code} {wave}</div>
             <div style={{fontSize:12,color:"#94a3b8",marginTop:2,fontWeight:600}}>{profile.name} · {emoji} {profile.subject||"Teacher"}</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -859,6 +868,8 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
                 const total=chs.reduce((s,c)=>s+c.totalHours,0);
                 const p=total>0?(done/total)*100:0;
                 const completed=p>=100;
+                // NEW: pick the chapter that still needs hours (or the last one) for the quick "+" shortcut
+                const quickChapter = chs.find(c=>c.completedHours<c.totalHours) || chs[chs.length-1];
                 return(
                   <div key={b} onClick={()=>onOpenBatch(b)} style={{background:"#fff",borderRadius:16,padding:"14px 16px",cursor:"pointer",borderLeft:`4px solid ${bc}`,boxShadow:"0 1px 8px rgba(0,0,0,.06)",display:"flex",alignItems:"center",gap:12}}>
                     <div style={{flex:1,minWidth:0}}>
@@ -872,6 +883,11 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
                       </div>
                       <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{p.toFixed(0)}% Progress</div>
                     </div>
+                    {/* NEW: quick "+" shortcut — jumps straight into hour entry, skipping the batch page */}
+                    {quickChapter&&(
+                      <button onClick={e=>{e.stopPropagation();onOpenChapter(quickChapter.id);}} title="Quick log hours"
+                        style={{width:34,height:34,borderRadius:"50%",background:bc,color:"#fff",border:"none",cursor:"pointer",fontSize:18,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 3px 10px ${bc}55`,lineHeight:1}}>+</button>
+                    )}
                     <span style={{color:"#cbd5e1",fontSize:18}}>›</span>
                   </div>
                 );
@@ -1284,7 +1300,9 @@ function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
 function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
   // FIX #6: use uncontrolled-style local state that doesn't trigger parent re-renders
   const [logH,setLogH]=useState("");
+  const [logUnit,setLogUnit]=useState("hours"); // NEW: "hours" or "minutes"
   const [extraH,setExtraH]=useState("");
+  const [extraUnit,setExtraUnit]=useState("hours"); // NEW: "hours" or "minutes"
   const [logDate,setLogDate]=useState(todayStr());
   const [logNote,setLogNote]=useState("");
   const [newTopic,setNewTopic]=useState("");
@@ -1308,7 +1326,7 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
   const logs=chapter.hourLogs||[];
 
   // FIX #4: Auto-detect extra hours — if adding logH hours would exceed allotted, auto-flag as extra
-  const logHoursVal = parseHours(logH);
+  const logHoursVal = toHoursFromInput(logH, logUnit);
   const wouldExceed = logHoursVal > 0 && (chapter.completedHours + logHoursVal) > chapter.totalHours;
   const autoExtraAmount = wouldExceed
     ? roundToMinute(Math.min(logHoursVal, (chapter.completedHours + logHoursVal) - chapter.totalHours))
@@ -1316,7 +1334,8 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
 
   // FIX #6: Use useCallback so functions don't change identity on every render
   const logHours=useCallback(()=>{
-    const h=roundToMinute(parseHours(logH));
+    // NEW: converts from whichever unit (hours or minutes) the person picked, always stores decimal hours
+    const h=roundToMinute(toHoursFromInput(logH,logUnit));
     if(!h||h<=0) return;
     // FIX #4: auto-detect extra portion
     const currentCompleted = chapter.completedHours;
@@ -1333,15 +1352,16 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
     };
     onUpdate(updatedChapter);
     setLogH("");setLogNote("");
-  },[logH,logDate,logNote,chapter,logs,onUpdate]);
+  },[logH,logUnit,logDate,logNote,chapter,logs,onUpdate]);
 
   const logExtra=useCallback(()=>{
-    const h=roundToMinute(parseHours(extraH));
+    // NEW: converts from whichever unit (hours or minutes) the person picked, always stores decimal hours
+    const h=roundToMinute(toHoursFromInput(extraH,extraUnit));
     if(!h||h<=0) return;
     const newLog={id:uid(),hours:h,date:logDate,note:logNote||"Extra",type:"extra",extraAmount:h};
     onUpdate({...chapter,completedHours:roundToMinute(chapter.completedHours+h),extraHours:roundToMinute((chapter.extraHours||0)+h),hourLogs:[...logs,newLog]});
     setExtraH("");setLogNote("");
-  },[extraH,logDate,logNote,chapter,logs,onUpdate]);
+  },[extraH,extraUnit,logDate,logNote,chapter,logs,onUpdate]);
 
   const deleteLog=useCallback(logId=>{
     const log=logs.find(l=>l.id===logId);
@@ -1412,16 +1432,25 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
       <div style={{padding:"20px 16px 80px",maxWidth:560,margin:"0 auto"}}>
         <Sec title="📅 Log Class Hours">
           <div style={{marginBottom:12}}>
-            <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Hours (decimal · e.g. 1.25 = 1h 15m)</label>
-            {/* Hours input + Log button */}
+            <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Log Time</label>
+            {/* NEW: choose whether the number typed below means hours or minutes */}
+            <div style={{display:"flex",gap:6,marginBottom:8}}>
+              {["hours","minutes"].map(u=>(
+                <button key={u} onClick={()=>setLogUnit(u)}
+                  style={{flex:1,padding:"8px",borderRadius:10,border:`2px solid ${logUnit===u?color:"#e2e8f0"}`,background:logUnit===u?`${color}15`:"#fff",fontWeight:700,fontSize:12,color:logUnit===u?color:"#64748b",cursor:"pointer",fontFamily:"inherit"}}>
+                  {u==="hours"?"⏱ Hours":"⏳ Minutes"}
+                </button>
+              ))}
+            </div>
+            {/* Hours/Minutes input + Log button */}
             <div style={{display:"flex",gap:8,marginBottom:10}}>
               <div style={{flex:1}}>
-                <input type="number" min={0} step={0.0833} value={logH}
+                <input type="number" min={0} step={logUnit==="minutes"?1:0.0833} value={logH}
                   onChange={e=>setLogH(e.target.value)}
                   onKeyDown={e=>e.key==="Enter"&&logHours()}
-                  placeholder="e.g. 1.5"
+                  placeholder={logUnit==="minutes"?"e.g. 20":"e.g. 1.5"}
                   style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
-                {logH&&<div style={{fontSize:11,color:color,marginTop:3,fontWeight:700}}>= {fmtHours(parseHours(logH))}</div>}
+                {logH&&<div style={{fontSize:11,color:color,marginTop:3,fontWeight:700}}>= {fmtHours(toHoursFromInput(logH,logUnit))}</div>}
               </div>
               <button onClick={logHours} style={{background:`linear-gradient(135deg,${color},${color}bb)`,color:"#fff",border:"none",borderRadius:12,padding:"0 22px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:15,boxShadow:`0 4px 14px ${color}44`,flexShrink:0}}>+ Log</button>
             </div>
@@ -1456,14 +1485,23 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
           {/* Extra Hours section */}
           <div style={{background:"linear-gradient(135deg,#fffbeb,#fef9c3)",border:"2px solid #fde68a",borderRadius:14,padding:"16px"}}>
             <div style={{fontSize:13,fontWeight:800,color:"#92400e",marginBottom:10}}>⭐ Extra Hours (Beyond Allotted)</div>
+            {/* NEW: choose whether the number typed below means hours or minutes */}
+            <div style={{display:"flex",gap:6,marginBottom:8}}>
+              {["hours","minutes"].map(u=>(
+                <button key={u} onClick={()=>setExtraUnit(u)}
+                  style={{flex:1,padding:"7px",borderRadius:9,border:`2px solid ${extraUnit===u?"#d97706":"#fde68a"}`,background:extraUnit===u?"#fde68a55":"#fffef5",fontWeight:700,fontSize:12,color:extraUnit===u?"#92400e":"#a16207",cursor:"pointer",fontFamily:"inherit"}}>
+                  {u==="hours"?"⏱ Hours":"⏳ Minutes"}
+                </button>
+              ))}
+            </div>
             <div style={{display:"flex",gap:8}}>
               <div style={{flex:1}}>
-                <input type="number" min={0} step={0.0833} value={extraH}
+                <input type="number" min={0} step={extraUnit==="minutes"?1:0.0833} value={extraH}
                   onChange={e=>setExtraH(e.target.value)}
                   onKeyDown={e=>e.key==="Enter"&&logExtra()}
-                  placeholder="e.g. 0.5"
+                  placeholder={extraUnit==="minutes"?"e.g. 15":"e.g. 0.5"}
                   style={{width:"100%",padding:"11px 14px",border:"2px solid #fde68a",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fffef5",boxSizing:"border-box"}}/>
-                {extraH&&<div style={{fontSize:11,color:"#92400e",marginTop:3,fontWeight:700}}>= {fmtHours(parseHours(extraH))}</div>}
+                {extraH&&<div style={{fontSize:11,color:"#92400e",marginTop:3,fontWeight:700}}>= {fmtHours(toHoursFromInput(extraH,extraUnit))}</div>}
               </div>
               <button onClick={logExtra} style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",border:"none",borderRadius:12,padding:"0 20px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:14,boxShadow:"0 4px 14px rgba(245,158,11,.3)",flexShrink:0}}>+ Add</button>
             </div>
