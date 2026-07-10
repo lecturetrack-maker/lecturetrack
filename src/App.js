@@ -1296,6 +1296,18 @@ function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
   );
 }
 
+// NEW/FIX: Sec moved to module scope (was previously re-created inside DetailPage on every
+// render, which made React treat it as a brand-new component type on every keystroke and
+// remount the whole section — including the input — dropping focus and closing the keyboard).
+function Sec({title,children}) {
+  return(
+    <div style={{background:"#fff",borderRadius:20,padding:20,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,.06)"}}>
+      <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:14}}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
 // ── Detail Page — FIX #3 (date/period layout) + FIX #4 (auto extra) + FIX #6 (keyboard) ──
 function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
   // FIX #6: use uncontrolled-style local state that doesn't trigger parent re-renders
@@ -1397,13 +1409,6 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
     clearTimeout(ntRef.current);
     ntRef.current=setTimeout(()=>onUpdate({...chapter,notes:v}),800);
   },[chapter,onUpdate]);
-
-  const Sec=({title,children})=>(
-    <div style={{background:"#fff",borderRadius:20,padding:20,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,.06)"}}>
-      <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:14}}>{title}</div>
-      {children}
-    </div>
-  );
 
   return(
     <div style={{minHeight:"100vh",background:"#f8fafc"}}>
