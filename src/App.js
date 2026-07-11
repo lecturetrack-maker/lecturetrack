@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Home as HomeIcon, FolderKanban, BookOpen, User as UserIcon, Bell } from "lucide-react";
+import {
+  Home as HomeIcon, FolderKanban, FolderOpen, BookOpen, User as UserIcon, Bell,
+  ArrowLeft, Share2, Download, Clock, CheckCircle2, Hourglass, Calendar,
+  Pencil, Trash2, Star, BarChart3, ChevronDown, ChevronUp, ChevronRight,
+  Plus, Search, LogOut, Camera, AlertTriangle, Cloud, CloudUpload, CloudOff,
+  X, ClipboardList, FileText, MapPin, GraduationCap, LogIn, UserPlus,
+  Inbox, Zap, FlaskConical, Dna, Calculator, PartyPopper, Trophy, Lightbulb
+} from "lucide-react";
 
 const supabase = createClient(
   "https://ddfmkfkvvadzlihiulnj.supabase.co",
@@ -82,7 +89,12 @@ const MOTIVATIONAL_QUOTES=[
   "Behind every successful student is a dedicated teacher like you! ❤️",
 ];
 
-const SUBJECT_EMOJI={"Physics":"⚡","Chemistry":"🧪","Biology":"🧬","Mathematics":"📐","Multiple Subjects":"📚"};
+// NEW: standard icon components for each subject (used instead of emoji in headers/stats)
+const SUBJECT_ICONS={"Physics":Zap,"Chemistry":FlaskConical,"Biology":Dna,"Mathematics":Calculator,"Multiple Subjects":BookOpen};
+function SubjectIcon({subject,size=14,color="currentColor"}) {
+  const Icon=SUBJECT_ICONS[subject]||BookOpen;
+  return <Icon size={size} color={color} strokeWidth={2.2}/>;
+}
 
 function todayStr() { return new Date().toISOString().split("T")[0]; }
 function fmtDate(d) {
@@ -315,7 +327,9 @@ function SplashScreen() {
         .splash-sub{animation:slideUp .5s ease .5s both}
         .splash-dot{animation:pulse 1.2s ease .8s infinite}
       `}</style>
-      <div className="splash-icon" style={{fontSize:80,marginBottom:16}}>👨‍🏫</div>
+      <div className="splash-icon" style={{width:96,height:96,borderRadius:26,background:"rgba(255,255,255,.15)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
+        <GraduationCap size={52} color="#fff" strokeWidth={1.8}/>
+      </div>
       <div className="splash-title" style={{fontSize:36,fontWeight:900,color:"#fff",letterSpacing:"-1px",marginBottom:6}}>LectureTrack</div>
       <div className="splash-sub" style={{fontSize:15,color:"rgba(255,255,255,.7)",fontWeight:600,marginBottom:40}}>Track every hour. Teach with clarity.</div>
       <div className="splash-dot" style={{width:8,height:8,background:"rgba(255,255,255,.6)",borderRadius:"50%"}}/>
@@ -326,18 +340,16 @@ function SplashScreen() {
 // ── Congrats Screen ───────────────────────────────────────────────
 function CongratsScreen({profile,totalHours,onClose}) {
   const quote=MOTIVATIONAL_QUOTES[Math.floor(Math.random()*MOTIVATIONAL_QUOTES.length)];
-  const sal=profile.gender==="male"?"Sir":"Ma'am";
-  const emoji=SUBJECT_EMOJI[profile.subject]||"📖";
   return (
     <div style={{position:"fixed",inset:0,background:"linear-gradient(135deg,#6366f1,#4338ca)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:30,textAlign:"center",overflowY:"auto"}}>
       <style>{`@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-20px)}} .bounce{animation:bounce 1s ease infinite}`}</style>
-      <div className="bounce" style={{fontSize:80,marginBottom:10}}>🎉</div>
+      <div className="bounce" style={{marginBottom:10}}><PartyPopper size={64} color="#fde68a" strokeWidth={1.6}/></div>
       <div style={{fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>Congratulations!</div>
-      <div style={{fontSize:18,fontWeight:700,color:"rgba(255,255,255,.9)",marginBottom:4}}>{profile.code} {sal}</div>
-      {profile.subject&&<div style={{fontSize:14,color:"rgba(255,255,255,.7)",marginBottom:8}}>{emoji} {profile.subject} Teacher</div>}
-      <div style={{fontSize:15,color:"rgba(255,255,255,.7)",marginBottom:28}}>You've completed <strong style={{color:"#fde68a"}}>{fmtHours(totalHours)}</strong> of lectures! 🏆</div>
+      <div style={{fontSize:18,fontWeight:700,color:"rgba(255,255,255,.9)",marginBottom:4}}>{profile.code}</div>
+      {profile.subject&&<div style={{fontSize:14,color:"rgba(255,255,255,.7)",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><SubjectIcon subject={profile.subject} size={14} color="rgba(255,255,255,.7)"/> {profile.subject} Teacher</div>}
+      <div style={{fontSize:15,color:"rgba(255,255,255,.7)",marginBottom:28,display:"flex",alignItems:"center",justifyContent:"center",gap:6,flexWrap:"wrap"}}>You've completed <strong style={{color:"#fde68a"}}>{fmtHours(totalHours)}</strong> of lectures! <Trophy size={16} color="#fde68a"/></div>
       <div style={{background:"rgba(255,255,255,.15)",borderRadius:20,padding:"22px 26px",maxWidth:340,marginBottom:30,backdropFilter:"blur(10px)"}}>
-        <div style={{fontSize:36,marginBottom:12}}>💡</div>
+        <div style={{marginBottom:12}}><Lightbulb size={30} color="#fde68a" strokeWidth={1.8}/></div>
         <div style={{fontSize:15,color:"#fff",fontWeight:600,lineHeight:1.8}}>{quote}</div>
       </div>
       <button onClick={onClose} style={{background:"#fff",color:"#6366f1",border:"none",borderRadius:16,padding:"14px 44px",fontSize:16,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 8px 24px rgba(0,0,0,.2)"}}>
@@ -378,7 +390,7 @@ function ChapterAutocomplete({value,onChange,subject}) {
               style={{padding:"11px 16px",cursor:"pointer",fontSize:14,fontWeight:600,color:"#1e293b",borderBottom:"1px solid #f1f5f9"}}
               onMouseEnter={e=>e.currentTarget.style.background="#f0f4ff"}
               onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-              📖 {s}
+              <span style={{display:"flex",alignItems:"center",gap:6}}><BookOpen size={13}/> {s}</span>
             </div>
           ))}
         </div>
@@ -430,20 +442,20 @@ function Onboarding({onDone}) {
     }catch(e){setError("❌ Error: "+e.message);}
     setLoading(false);
   };
-  const SUBJECT_OPTIONS=[{label:"⚡ Physics",value:"Physics"},{label:"🧪 Chemistry",value:"Chemistry"},{label:"🧬 Biology",value:"Biology"},{label:"📐 Mathematics",value:"Mathematics"},{label:"📚 Multiple",value:"Multiple Subjects"}];
+  const SUBJECT_OPTIONS=[{label:"Physics",value:"Physics"},{label:"Chemistry",value:"Chemistry"},{label:"Biology",value:"Biology"},{label:"Mathematics",value:"Mathematics"},{label:"Multiple",value:"Multiple Subjects"}];
   return(
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#4f46e5,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}} .fade-up{animation:fadeUp .4s ease forwards}`}</style>
       <div className="fade-up" style={{background:"#fff",borderRadius:28,padding:32,width:"100%",maxWidth:420,boxShadow:"0 32px 80px rgba(0,0,0,.25)"}}>
         <div style={{textAlign:"center",marginBottom:26}}>
-          <div style={{width:72,height:72,background:"linear-gradient(135deg,#6366f1,#4338ca)",borderRadius:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,margin:"0 auto 12px"}}>👨‍🏫</div>
+          <div style={{width:72,height:72,background:"linear-gradient(135deg,#6366f1,#4338ca)",borderRadius:20,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}><GraduationCap size={38} color="#fff" strokeWidth={1.8}/></div>
           <h2 style={{margin:"0 0 4px",fontSize:26,fontWeight:900,color:"#0f172a",letterSpacing:"-0.5px"}}>LectureTrack</h2>
           <p style={{margin:0,color:"#94a3b8",fontSize:13,fontWeight:500}}>Track every hour. Teach with clarity.</p>
         </div>
         <div style={{display:"flex",background:"#f1f5f9",borderRadius:14,padding:4,marginBottom:22,gap:4}}>
           {["login","register"].map(m=>(
-            <button key={m} onClick={()=>{setMode(m);setError("");}} style={{flex:1,padding:"10px",borderRadius:11,border:"none",cursor:"pointer",background:mode===m?"#fff":"transparent",fontWeight:800,fontSize:14,color:mode===m?"#6366f1":"#64748b",fontFamily:"inherit",boxShadow:mode===m?"0 2px 10px rgba(99,102,241,.15)":"none",transition:"all .2s"}}>
-              {m==="login"?"🔑 Login":"📝 Register"}
+            <button key={m} onClick={()=>{setMode(m);setError("");}} style={{flex:1,padding:"10px",borderRadius:11,border:"none",cursor:"pointer",background:mode===m?"#fff":"transparent",fontWeight:800,fontSize:14,color:mode===m?"#6366f1":"#64748b",fontFamily:"inherit",boxShadow:mode===m?"0 2px 10px rgba(99,102,241,.15)":"none",transition:"all .2s",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+              {m==="login"?<LogIn size={15}/>:<UserPlus size={15}/>}{m==="login"?"Login":"Register"}
             </button>
           ))}
         </div>
@@ -457,7 +469,7 @@ function Onboarding({onDone}) {
             <div style={{display:"flex",gap:10}}>
               {["male","female"].map(g=>(
                 <button key={g} onClick={()=>setGender(g)} style={{flex:1,padding:"10px",borderRadius:12,border:`2px solid ${gender===g?"#6366f1":"#e2e8f0"}`,background:gender===g?"#eef2ff":"#f8fafc",fontWeight:700,cursor:"pointer",color:gender===g?"#6366f1":"#64748b",fontFamily:"inherit",fontSize:13}}>
-                  {g==="male"?"👨 Male":"👩 Female"}
+                  {g==="male"?"Male":"Female"}
                 </button>
               ))}
             </div>
@@ -466,8 +478,8 @@ function Onboarding({onDone}) {
             <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:8}}>Subject You Teach</label>
             <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
               {SUBJECT_OPTIONS.map(s=>(
-                <button key={s.value} onClick={()=>setSubject(s.value)} style={{padding:"8px 14px",borderRadius:12,border:`2px solid ${subject===s.value?"#6366f1":"#e2e8f0"}`,background:subject===s.value?"#eef2ff":"#f8fafc",fontWeight:700,cursor:"pointer",color:subject===s.value?"#6366f1":"#64748b",fontFamily:"inherit",fontSize:12}}>
-                  {s.label}
+                <button key={s.value} onClick={()=>setSubject(s.value)} style={{padding:"8px 14px",borderRadius:12,border:`2px solid ${subject===s.value?"#6366f1":"#e2e8f0"}`,background:subject===s.value?"#eef2ff":"#f8fafc",fontWeight:700,cursor:"pointer",color:subject===s.value?"#6366f1":"#64748b",fontFamily:"inherit",fontSize:12,display:"flex",alignItems:"center",gap:6}}>
+                  <SubjectIcon subject={s.value} size={13} color={subject===s.value?"#6366f1":"#64748b"}/>{s.label}
                 </button>
               ))}
             </div>
@@ -514,7 +526,7 @@ function Modal({title,onClose,children}) {
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:22,padding:26,width:"100%",maxWidth:440,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.25)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <h3 style={{margin:0,fontSize:18,fontWeight:800,color:"#0f172a"}}>{title}</h3>
-          {onClose&&<button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:99,width:34,height:34,cursor:"pointer",fontSize:20,color:"#64748b",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>}
+          {onClose&&<button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:99,width:34,height:34,cursor:"pointer",color:"#64748b",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={18}/></button>}
         </div>
         {children}
       </div>
@@ -524,15 +536,54 @@ function Modal({title,onClose,children}) {
 
 // ── SyncBadge ─────────────────────────────────────────────────────
 function SyncBadge({status}) {
-  const cfg={saving:{bg:"#eef2ff",color:"#6366f1",text:"⏳ Saving..."},saved:{bg:"#dcfce7",color:"#16a34a",text:"☁️ Saved"},error:{bg:"#fee2e2",color:"#dc2626",text:"❌ Failed"}}[status];
+  const cfg={
+    saving:{bg:"#eef2ff",color:"#6366f1",text:"Saving...",Icon:CloudUpload},
+    saved:{bg:"#dcfce7",color:"#16a34a",text:"Saved",Icon:Cloud},
+    error:{bg:"#fee2e2",color:"#dc2626",text:"Failed",Icon:CloudOff},
+  }[status];
   if(!cfg) return null;
-  return <div style={{background:cfg.bg,color:cfg.color,fontSize:11,fontWeight:700,padding:"4px 12px",borderRadius:99}}>{cfg.text}</div>;
+  const {Icon}=cfg;
+  return (
+    <div style={{background:cfg.bg,color:cfg.color,fontSize:11,fontWeight:700,padding:"4px 12px",borderRadius:99,display:"flex",alignItems:"center",gap:5}}>
+      <Icon size={13} strokeWidth={2.4}/>{cfg.text}
+    </div>
+  );
 }
 
 function PBar({pct,color="#fff",bg="rgba(255,255,255,.25)",height=8}) {
   return(
     <div style={{background:bg,borderRadius:99,height,overflow:"hidden"}}>
       <div style={{width:`${Math.min(pct,100)}%`,height:"100%",background:color,borderRadius:99,transition:"width .7s ease"}}/>
+    </div>
+  );
+}
+
+// NEW: darkens a hex color by a given percent — used to build a deep, professional header
+// gradient from each batch's accent color instead of a bright flat gradient.
+function shadeColor(hex,percent){
+  if(!hex||hex[0]!=="#") return hex;
+  let r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  r=Math.round(r*(1-percent)); g=Math.round(g*(1-percent)); b=Math.round(b*(1-percent));
+  const toHex=n=>Math.max(0,Math.min(255,n)).toString(16).padStart(2,"0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+// NEW: circular progress ring (used at the top of the Batch page, matching the reference design)
+function CircularProgress({pct,size=112,strokeWidth=10,trackColor="rgba(255,255,255,.18)",progressColor="#34d399",label,sublabel}) {
+  const r=(size-strokeWidth)/2;
+  const c=2*Math.PI*r;
+  const offset=c-(Math.min(pct,100)/100)*c;
+  return(
+    <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+      <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={trackColor} strokeWidth={strokeWidth}/>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={progressColor} strokeWidth={strokeWidth}
+          strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round" style={{transition:"stroke-dashoffset .7s ease"}}/>
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+        <div style={{fontSize:size*0.24,fontWeight:900,color:"#fff",lineHeight:1}}>{label}</div>
+        {sublabel&&<div style={{fontSize:size*0.085,fontWeight:600,color:"rgba(255,255,255,.75)",marginTop:4,textAlign:"center"}}>{sublabel}</div>}
+      </div>
     </div>
   );
 }
@@ -597,7 +648,7 @@ function BatchRowInput({rowId, initialName, initialHours, onNameChange, onHoursC
                   style={{padding:"10px 14px",cursor:"pointer",fontSize:13,fontWeight:600,color:"#1e293b",borderBottom:"1px solid #f1f5f9"}}
                   onMouseEnter={e=>e.currentTarget.style.background="#f0f4ff"}
                   onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                  📖 {s}
+                  <span style={{display:"flex",alignItems:"center",gap:6}}><BookOpen size={13}/> {s}</span>
                 </div>
               ))}
             </div>
@@ -622,7 +673,7 @@ function BatchRowInput({rowId, initialName, initialHours, onNameChange, onHoursC
       {/* FIX #1 & #5: Show topics from master chapter library */}
       {topics.length>0&&(
         <div style={{marginTop:8,padding:"8px 10px",background:"#eef2ff",borderRadius:8}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#6366f1",marginBottom:4}}>📋 {topics.length} topics will be imported from chapter library</div>
+          <div style={{fontSize:11,fontWeight:700,color:"#6366f1",marginBottom:4,display:"flex",alignItems:"center",gap:5}}><ClipboardList size={12}/> {topics.length} topics will be imported from chapter library</div>
           <div style={{fontSize:11,color:"#475569"}}>{topics.slice(0,3).map(t=>t.name).join(" · ")}{topics.length>3?` · +${topics.length-3} more`:""}</div>
         </div>
       )}
@@ -680,7 +731,7 @@ function BatchFormModal({onSave,onClose,subject,masterChapters}) {
   };
 
   return(
-    <Modal title="🗂️ Add Batch" onClose={onClose}>
+    <Modal title={<span style={{display:"flex",alignItems:"center",gap:8}}><FolderOpen size={17}/> Add Batch</span>} onClose={onClose}>
       <div style={{marginBottom:14}}>
         <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Batch Code / Name</label>
         <input value={batchCode} onChange={e=>setBatchCode(e.target.value.toUpperCase())} placeholder="e.g. X1, 11A, RISE"
@@ -705,11 +756,11 @@ function BatchFormModal({onSave,onClose,subject,masterChapters}) {
         ))}
       </div>
       <button onClick={addRow} style={{width:"100%",padding:"10px",background:"#eef2ff",color:"#6366f1",border:"2px dashed #c7d2fe",borderRadius:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14,marginBottom:16}}>
-        + Add Another Chapter
+        <span style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Plus size={15}/> Add Another Chapter</span>
       </button>
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
-        <button onClick={handleSave} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(99,102,241,.3)"}}>Create Batch ✓</button>
+        <button onClick={handleSave} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(99,102,241,.3)"}}><span style={{display:"flex",alignItems:"center",gap:6}}><CheckCircle2 size={15}/> Create Batch</span></button>
       </div>
     </Modal>
   );
@@ -722,7 +773,7 @@ function ChapterMasterModal({chapter,onSave,onClose}) {
   const addTopic=()=>{if(!newTopic.trim())return;setTopics(prev=>[...prev,{id:uid(),name:newTopic.trim(),done:false}]);setNewTopic("");};
   const removeTopic=id=>setTopics(prev=>prev.filter(t=>t.id!==id));
   return(
-    <Modal title={`📋 Topics · ${chapter.name}`} onClose={onClose}>
+    <Modal title={<span style={{display:"flex",alignItems:"center",gap:8}}><ClipboardList size={17}/> Topics · {chapter.name}</span>} onClose={onClose}>
       <div style={{fontSize:12,color:"#94a3b8",marginBottom:14}}>Topics you add here will appear in all batch pages for this chapter.</div>
       {topics.length===0&&<div style={{textAlign:"center",padding:"20px",color:"#94a3b8",fontSize:14}}>No topics yet. Add below.</div>}
       <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:14,maxHeight:280,overflowY:"auto"}}>
@@ -736,11 +787,11 @@ function ChapterMasterModal({chapter,onSave,onClose}) {
       <div style={{display:"flex",gap:8,marginBottom:18}}>
         <input value={newTopic} onChange={e=>setNewTopic(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addTopic()} placeholder="Add a topic..."
           style={{flex:1,padding:"11px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff"}}/>
-        <button onClick={addTopic} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"0 18px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>+ Add</button>
+        <button onClick={addTopic} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"0 18px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14}}><span style={{display:"flex",alignItems:"center",gap:5}}><Plus size={14}/> Add</span></button>
       </div>
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
-        <button onClick={()=>onSave({...chapter,topics})} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(99,102,241,.3)"}}>Save Topics ✓</button>
+        <button onClick={()=>onSave({...chapter,topics})} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(99,102,241,.3)"}}><span style={{display:"flex",alignItems:"center",gap:6}}><CheckCircle2 size={15}/> Save Topics</span></button>
       </div>
     </Modal>
   );
@@ -754,9 +805,9 @@ function AddChapterMasterModal({onSave,onClose,subject}) {
   const addTopic=()=>{if(!newTopic.trim())return;setTopics(prev=>[...prev,{id:uid(),name:newTopic.trim(),done:false}]);setNewTopic("");};
   const removeTopic=id=>setTopics(prev=>prev.filter(t=>t.id!==id));
   return(
-    <Modal title="📚 Add Chapter" onClose={onClose}>
+    <Modal title={<span style={{display:"flex",alignItems:"center",gap:8}}><BookOpen size={17}/> Add Chapter</span>} onClose={onClose}>
       <ChapterAutocomplete value={name} onChange={setName} subject={subject}/>
-      <div style={{fontSize:13,fontWeight:700,color:"#475569",marginBottom:8}}>📋 Topics (optional)</div>
+      <div style={{fontSize:13,fontWeight:700,color:"#475569",marginBottom:8,display:"flex",alignItems:"center",gap:6}}><ClipboardList size={14}/> Topics (optional)</div>
       {topics.length===0&&<div style={{fontSize:12,color:"#94a3b8",marginBottom:10}}>Add topics — they will appear in batch pages for this chapter.</div>}
       <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:10,maxHeight:220,overflowY:"auto"}}>
         {topics.map((t,i)=>(
@@ -769,11 +820,11 @@ function AddChapterMasterModal({onSave,onClose,subject}) {
       <div style={{display:"flex",gap:8,marginBottom:18}}>
         <input value={newTopic} onChange={e=>setNewTopic(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addTopic()} placeholder="Add a topic..."
           style={{flex:1,padding:"11px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff"}}/>
-        <button onClick={addTopic} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"0 18px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>+ Add</button>
+        <button onClick={addTopic} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"0 18px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14}}><span style={{display:"flex",alignItems:"center",gap:5}}><Plus size={14}/> Add</span></button>
       </div>
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
-        <button onClick={()=>{if(name.trim())onSave({name:name.trim(),topics})}} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(99,102,241,.3)"}}>Save ✓</button>
+        <button onClick={()=>{if(name.trim())onSave({name:name.trim(),topics})}} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(99,102,241,.3)"}}><span style={{display:"flex",alignItems:"center",gap:6}}><CheckCircle2 size={15}/> Save</span></button>
       </div>
     </Modal>
   );
@@ -789,7 +840,6 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
   const hr=new Date().getHours();
   const gw=hr<12?"Good Morning":hr<17?"Good Afternoon":"Good Evening";
   const wave=hr<12?"☀️":hr<17?"🌤️":"🌙";
-  const emoji=SUBJECT_EMOJI[profile.subject]||"📖";
   const allBatches=[...new Set(batchChapters.map(c=>c.batchCode))].sort();
   // Only show currently running (not completed) batches on the front page
   const batches=allBatches.filter(b=>!completedBatches.includes(b));
@@ -810,7 +860,7 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <div>
             <div style={{fontSize:19,fontWeight:900,color:"#0f172a"}}>{gw}, {profile.code} {wave}</div>
-            <div style={{fontSize:12,color:"#94a3b8",marginTop:2,fontWeight:600}}>{profile.name} · {emoji} {profile.subject||"Teacher"}</div>
+            <div style={{fontSize:12,color:"#94a3b8",marginTop:2,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>{profile.name} · <SubjectIcon subject={profile.subject} size={13} color="#94a3b8"/> {profile.subject||"Teacher"}</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             {syncStatus&&<SyncBadge status={syncStatus}/>}
@@ -837,13 +887,13 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
           {[
-            {label:"Hours Taken",val:fmtHours(monthTaken),icon:"⏱️"},
-            {label:"Allotted (Total)",val:fmtHours(totalAllotted),icon:"📋"},
-            {label:"Extra Hours",val:fmtHours(monthExtra),icon:"⭐"},
-            {label:"Overall Progress",val:pctAllTime.toFixed(0)+"%",icon:"📈"},
+            {label:"Hours Taken",val:fmtHours(monthTaken),Icon:Clock},
+            {label:"Allotted (Total)",val:fmtHours(totalAllotted),Icon:ClipboardList},
+            {label:"Extra Hours",val:fmtHours(monthExtra),Icon:Star},
+            {label:"Overall Progress",val:pctAllTime.toFixed(0)+"%",Icon:BarChart3},
           ].map(s=>(
             <div key={s.label} style={{background:"rgba(255,255,255,.15)",borderRadius:16,padding:"12px 14px"}}>
-              <div style={{fontSize:16,marginBottom:4}}>{s.icon}</div>
+              <div style={{marginBottom:4}}><s.Icon size={17} color="#fff" strokeWidth={2.2}/></div>
               <div style={{fontSize:17,fontWeight:900}}>{s.val}</div>
               <div style={{fontSize:10,opacity:.75,fontWeight:600,marginTop:2}}>{s.label}</div>
             </div>
@@ -859,7 +909,7 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
       <div style={{padding:"0 16px"}}>
         {batches.length>0&&(
           <div style={{marginBottom:20}}>
-            <div style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:10}}>🗂️ Your Batches</div>
+            <div style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:10,display:"flex",alignItems:"center",gap:6}}><FolderOpen size={15} color="#0f172a"/> Your Batches</div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {batches.map((b,i)=>{
                 const bc=BATCH_COLORS[allBatches.indexOf(b)%BATCH_COLORS.length];
@@ -875,7 +925,7 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:8}}>
                         <div style={{fontSize:17,fontWeight:900,color:bc}}>{b}</div>
-                        <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:99,background:completed?"#fef3c7":"#eef2ff",color:completed?"#b45309":"#4338ca",whiteSpace:"nowrap"}}>{completed?"✓ Completed":"⏱ In Progress"}</span>
+                        <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:99,background:completed?"#fef3c7":"#eef2ff",color:completed?"#b45309":"#4338ca",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>{completed?<CheckCircle2 size={11}/>:<Clock size={11}/>}{completed?"Completed":"In Progress"}</span>
                       </div>
                       <div style={{fontSize:11,color:"#94a3b8",marginBottom:6}}>{chs.length} chapters</div>
                       <div style={{background:"#f1f5f9",borderRadius:99,height:5}}>
@@ -886,9 +936,9 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
                     {/* NEW: quick "+" shortcut — jumps straight into hour entry, skipping the batch page */}
                     {quickChapter&&(
                       <button onClick={e=>{e.stopPropagation();onOpenChapter(quickChapter.id);}} title="Quick log hours"
-                        style={{width:34,height:34,borderRadius:"50%",background:bc,color:"#fff",border:"none",cursor:"pointer",fontSize:18,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 3px 10px ${bc}55`,lineHeight:1}}>+</button>
+                        style={{width:34,height:34,borderRadius:"50%",background:bc,color:"#fff",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 3px 10px ${bc}55`}}><Plus size={18} strokeWidth={2.6}/></button>
                     )}
-                    <span style={{color:"#cbd5e1",fontSize:18}}>›</span>
+                    <ChevronRight size={18} color="#cbd5e1"/>
                   </div>
                 );
               })}
@@ -898,7 +948,7 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
 
         {batchChapters.length===0&&(
           <div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}>
-            <div style={{fontSize:56,marginBottom:16}}>📭</div>
+            <div style={{marginBottom:16,display:"flex",justifyContent:"center"}}><Inbox size={48} strokeWidth={1.5}/></div>
             <div style={{fontWeight:800,fontSize:18,color:"#475569",marginBottom:8}}>No batches yet</div>
             <div style={{fontSize:14}}>Go to Batches tab to add your first batch</div>
           </div>
@@ -906,7 +956,7 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
 
         {batchChapters.length>0&&batches.length===0&&(
           <div style={{textAlign:"center",padding:"50px 20px",color:"#94a3b8"}}>
-            <div style={{fontSize:48,marginBottom:14}}>🎉</div>
+            <div style={{marginBottom:14,display:"flex",justifyContent:"center"}}><PartyPopper size={42} strokeWidth={1.5}/></div>
             <div style={{fontWeight:800,fontSize:16,color:"#475569",marginBottom:6}}>All batches completed!</div>
             <div style={{fontSize:13}}>Check the Batches tab to view or reopen them</div>
           </div>
@@ -924,14 +974,17 @@ function ChaptersTab({masterChapters,onOpenMaster,onAddMaster,onDeleteMaster}) {
   return(
     <div style={{padding:"20px 16px 20px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-        <div style={{fontSize:20,fontWeight:900,color:"#0f172a"}}>📚 Chapter Library</div>
-        <button onClick={onAddMaster} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"10px 18px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:14,boxShadow:"0 4px 14px rgba(99,102,241,.35)"}}>+ Add</button>
+        <div style={{fontSize:20,fontWeight:900,color:"#0f172a",display:"flex",alignItems:"center",gap:8}}><BookOpen size={19}/> Chapter Library</div>
+        <button onClick={onAddMaster} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"10px 18px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:14,boxShadow:"0 4px 14px rgba(99,102,241,.35)",display:"flex",alignItems:"center",gap:6}}><Plus size={15}/> Add</button>
       </div>
       <div style={{fontSize:12,color:"#94a3b8",marginBottom:12,fontWeight:500}}>Add chapters and their topics here. Topics appear automatically in batch pages.</div>
-      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search chapters..."
-        style={{width:"100%",padding:"12px 16px",border:"2px solid #e2e8f0",borderRadius:14,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",marginBottom:12,boxSizing:"border-box"}}/>
+      <div style={{position:"relative",marginBottom:12}}>
+        <Search size={16} color="#94a3b8" style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)"}}/>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search chapters..."
+          style={{width:"100%",padding:"12px 16px 12px 40px",border:"2px solid #e2e8f0",borderRadius:14,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
+      </div>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {filtered.length===0&&<div style={{textAlign:"center",padding:"50px 20px",color:"#94a3b8"}}><div style={{fontSize:44}}>📭</div><div style={{fontWeight:700,marginTop:12,fontSize:16}}>No chapters yet</div></div>}
+        {filtered.length===0&&<div style={{textAlign:"center",padding:"50px 20px",color:"#94a3b8"}}><div style={{display:"flex",justifyContent:"center"}}><Inbox size={40} strokeWidth={1.5}/></div><div style={{fontWeight:700,marginTop:12,fontSize:16}}>No chapters yet</div></div>}
         {filtered.map(c=>{
           const topicCount=(c.topics||[]).length;
           return(
@@ -943,10 +996,10 @@ function ChaptersTab({masterChapters,onOpenMaster,onAddMaster,onDeleteMaster}) {
                 <div style={{fontSize:14,fontWeight:800,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
                 <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>{topicCount>0?`${topicCount} topics`:"No topics yet — tap to add"}</div>
               </div>
-              <div style={{background:"#eef2ff",color:"#6366f1",fontSize:11,fontWeight:700,padding:"4px 12px",borderRadius:99,flexShrink:0,whiteSpace:"nowrap"}}>
-                Edit Topics →
+              <div style={{background:"#eef2ff",color:"#6366f1",fontSize:11,fontWeight:700,padding:"4px 12px",borderRadius:99,flexShrink:0,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>
+                Edit Topics <ChevronRight size={12}/>
               </div>
-              <button onClick={e=>{e.stopPropagation();onDeleteMaster(c.id);}} style={{background:"#fee2e2",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",fontSize:13,color:"#ef4444",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>🗑️</button>
+              <button onClick={e=>{e.stopPropagation();onDeleteMaster(c.id);}} style={{background:"#fee2e2",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",color:"#ef4444",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Trash2 size={14}/></button>
             </div>
           );
         })}
@@ -962,10 +1015,10 @@ function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatch,completedBatc
   return(
     <div style={{padding:"20px 16px 20px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-        <div style={{fontSize:20,fontWeight:900,color:"#0f172a"}}>🗂️ Batches</div>
-        <button onClick={onAddBatch} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"10px 18px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:14,boxShadow:"0 4px 14px rgba(99,102,241,.35)"}}>+ Add Batch</button>
+        <div style={{fontSize:20,fontWeight:900,color:"#0f172a",display:"flex",alignItems:"center",gap:8}}><FolderOpen size={19}/> Batches</div>
+        <button onClick={onAddBatch} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"10px 18px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:14,boxShadow:"0 4px 14px rgba(99,102,241,.35)",display:"flex",alignItems:"center",gap:6}}><Plus size={15}/> Add Batch</button>
       </div>
-      {batches.length===0&&<div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}><div style={{fontSize:44}}>📭</div><div style={{fontWeight:700,marginTop:12,fontSize:16}}>No batches yet</div><div style={{fontSize:13,marginTop:4}}>Tap + Add Batch to get started</div></div>}
+      {batches.length===0&&<div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}><div style={{display:"flex",justifyContent:"center"}}><Inbox size={40} strokeWidth={1.5}/></div><div style={{fontWeight:700,marginTop:12,fontSize:16}}>No batches yet</div><div style={{fontSize:13,marginTop:4}}>Tap + Add Batch to get started</div></div>}
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         {batches.map((b,i)=>{
           const bc=BATCH_COLORS[i%BATCH_COLORS.length];
@@ -981,9 +1034,9 @@ function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatch,completedBatc
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                   <div style={{fontSize:38,fontWeight:900,letterSpacing:"-1px"}}>{b}</div>
-                  {isCompleted&&<span style={{fontSize:10,fontWeight:800,padding:"4px 10px",borderRadius:99,background:"rgba(255,255,255,.3)",whiteSpace:"nowrap"}}>✅ Completed</span>}
+                  {isCompleted&&<span style={{fontSize:10,fontWeight:800,padding:"4px 10px",borderRadius:99,background:"rgba(255,255,255,.3)",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:4}}><CheckCircle2 size={11}/> Completed</span>}
                 </div>
-                <button onClick={e=>{e.stopPropagation();onDeleteBatch(b);}} style={{background:"rgba(239,68,68,.3)",border:"none",borderRadius:10,padding:"7px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>🗑️ Delete</button>
+                <button onClick={e=>{e.stopPropagation();onDeleteBatch(b);}} style={{background:"rgba(239,68,68,.3)",border:"none",borderRadius:10,padding:"7px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12,display:"flex",alignItems:"center",gap:5}}><Trash2 size={13}/> Delete</button>
               </div>
               <div style={{fontSize:13,opacity:.8,marginBottom:14}}>{chs.length} chapters</div>
               <div style={{display:"flex",gap:10,marginBottom:12}}>
@@ -995,7 +1048,7 @@ function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatch,completedBatc
                 ))}
               </div>
               <PBar pct={p}/>
-              <div style={{fontSize:12,opacity:.8,marginTop:5,fontWeight:600}}>{p.toFixed(0)}% · Tap to manage →</div>
+              <div style={{fontSize:12,opacity:.8,marginTop:5,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>{p.toFixed(0)}% · Tap to manage <ChevronRight size={13}/></div>
             </div>
           );
         })}
@@ -1012,7 +1065,6 @@ function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
   const totalAllotted=batchChapters.reduce((s,c)=>s+c.totalHours,0);
   const totalExtra=batchChapters.reduce((s,c)=>s+(c.extraHours||0),0);
   const batches=[...new Set(batchChapters.map(c=>c.batchCode))];
-  const emoji=SUBJECT_EMOJI[profile.subject]||"📖";
 
   const handlePhotoUpload=e=>{
     const file=e.target.files[0];
@@ -1040,22 +1092,22 @@ function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
     <div style={{padding:"20px 16px 20px"}}>
       <div style={{background:"linear-gradient(135deg,#4f46e5,#7c3aed)",borderRadius:24,padding:"28px 24px",color:"#fff",marginBottom:20,textAlign:"center",position:"relative",overflow:"hidden"}}>
         <div style={{position:"relative",display:"inline-block",marginBottom:14}}>
-          <div style={{width:90,height:90,borderRadius:"50%",border:"4px solid rgba(255,255,255,.4)",overflow:"hidden",margin:"0 auto",background:"rgba(255,255,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40}}>
-            {profile.photo?<img src={profile.photo} alt="profile" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>{profile.gender==="female"?"👩":"👨"}</span>}
+          <div style={{width:90,height:90,borderRadius:"50%",border:"4px solid rgba(255,255,255,.4)",overflow:"hidden",margin:"0 auto",background:"rgba(255,255,255,.2)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            {profile.photo?<img src={profile.photo} alt="profile" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<UserIcon size={38} color="#fff"/>}
           </div>
-          <button onClick={()=>fileRef.current.click()} style={{position:"absolute",bottom:0,right:0,background:"#fff",border:"none",borderRadius:"50%",width:28,height:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,.2)",fontSize:14}}>📷</button>
+          <button onClick={()=>fileRef.current.click()} style={{position:"absolute",bottom:0,right:0,background:"#fff",border:"none",borderRadius:"50%",width:28,height:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,.2)"}}><Camera size={14} color="#4f46e5"/></button>
         </div>
         <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoUpload} style={{display:"none"}}/>
         <div style={{fontSize:22,fontWeight:900,marginBottom:4}}>{profile.name}</div>
-        <div style={{fontSize:14,opacity:.8,marginBottom:4}}>{emoji} {profile.subject||"Teacher"}</div>
+        <div style={{fontSize:14,opacity:.8,marginBottom:4,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><SubjectIcon subject={profile.subject} size={14} color="rgba(255,255,255,.8)"/> {profile.subject||"Teacher"}</div>
         <div style={{fontSize:13,opacity:.6,background:"rgba(255,255,255,.15)",borderRadius:99,padding:"4px 16px",display:"inline-block"}}>{profile.code}</div>
       </div>
       <div style={{background:"#fff",borderRadius:20,padding:20,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,.07)"}}>
-        <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:14}}>📊 Your Stats</div>
+        <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:14,display:"flex",alignItems:"center",gap:7}}><BarChart3 size={16}/> Your Stats</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          {[{label:"Hours Taken",val:fmtHours(totalDone),color:"#6366f1",icon:"⏱️"},{label:"Allotted",val:fmtHours(totalAllotted),color:"#10b981",icon:"📋"},{label:"Extra Hours",val:fmtHours(totalExtra),color:"#f59e0b",icon:"⭐"},{label:"Batches",val:batches.length,color:"#ef4444",icon:"🗂️"},{label:"Chapters",val:batchChapters.length,color:"#8b5cf6",icon:"📚"},{label:"Progress",val:(totalAllotted>0?(totalDone/totalAllotted)*100:0).toFixed(0)+"%",color:"#14b8a6",icon:"📈"}].map(s=>(
+          {[{label:"Hours Taken",val:fmtHours(totalDone),color:"#6366f1",Icon:Clock},{label:"Allotted",val:fmtHours(totalAllotted),color:"#10b981",Icon:ClipboardList},{label:"Extra Hours",val:fmtHours(totalExtra),color:"#f59e0b",Icon:Star},{label:"Batches",val:batches.length,color:"#ef4444",Icon:FolderOpen},{label:"Chapters",val:batchChapters.length,color:"#8b5cf6",Icon:BookOpen},{label:"Progress",val:(totalAllotted>0?(totalDone/totalAllotted)*100:0).toFixed(0)+"%",color:"#14b8a6",Icon:BarChart3}].map(s=>(
             <div key={s.label} style={{background:`${s.color}0f`,borderRadius:14,padding:"14px 16px",border:`1.5px solid ${s.color}22`}}>
-              <div style={{fontSize:20,marginBottom:4}}>{s.icon}</div>
+              <div style={{marginBottom:4}}><s.Icon size={19} color={s.color} strokeWidth={2.2}/></div>
               <div style={{fontSize:20,fontWeight:900,color:s.color}}>{s.val}</div>
               <div style={{fontSize:11,color:"#94a3b8",fontWeight:600,marginTop:2}}>{s.label}</div>
             </div>
@@ -1063,19 +1115,19 @@ function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
         </div>
       </div>
       <div style={{background:"#fff",borderRadius:20,padding:20,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,.07)"}}>
-        <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:14}}>⚡ Quick Actions</div>
+        <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:14,display:"flex",alignItems:"center",gap:7}}><Zap size={16}/> Quick Actions</div>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           <button onClick={downloadCSV} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px",background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:14,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14,boxShadow:"0 4px 14px rgba(99,102,241,.3)"}}>
-            <span style={{fontSize:22}}>📊</span>
+            <Download size={22}/>
             <div style={{textAlign:"left"}}><div>Download CSV Report</div><div style={{fontSize:11,opacity:.75,fontWeight:500}}>Full chapter report for all batches</div></div>
           </button>
           <button onClick={onLogout} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px",background:"#fff",color:"#ef4444",border:"2px solid #fee2e2",borderRadius:14,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14}}>
-            <span style={{fontSize:22}}>🔒</span>
+            <LogOut size={22}/>
             <div style={{textAlign:"left"}}><div>Logout</div><div style={{fontSize:11,color:"#94a3b8",fontWeight:500}}>Sign out of your account</div></div>
           </button>
         </div>
       </div>
-      <div style={{textAlign:"center",fontSize:12,color:"#cbd5e1",paddingBottom:10}}>LectureTrack v13 · Made with ❤️ for teachers</div>
+      <div style={{textAlign:"center",fontSize:12,color:"#cbd5e1",paddingBottom:10}}>LectureTrack v13 · Made for teachers</div>
     </div>
   );
 }
@@ -1086,8 +1138,13 @@ function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
 function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapter,onEditChapter,onOpenChapter,onDeleteBatch,completed,onToggleCompleted}) {
   const total=chapters.reduce((s,c)=>s+c.totalHours,0);
   const done=chapters.reduce((s,c)=>s+c.completedHours,0);
+  const remaining=Math.max(0,total-done);
   const pct=total>0?(done/total)*100:0;
+  const status=getStatus(done,total);
   const [sharing,setSharing]=useState(false);
+  // NEW: deep, professional header gradient built from the batch's accent color
+  const headerFrom=shadeColor(color,0.72);
+  const headerTo=shadeColor(color,0.82);
 
   const downloadCSV=()=>{
     const csv=buildBatchHistoryCSV(batchCode,chapters);
@@ -1105,29 +1162,35 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
 
   return(
     <div style={{minHeight:"100vh",background:"#f8fafc"}}>
-      <div style={{background:`linear-gradient(135deg,${color},${color}bb)`,padding:"24px 20px 28px",color:"#fff",position:"relative",overflow:"hidden",borderRadius:"0 0 24px 24px"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <button onClick={onBack} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:12,padding:"8px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>← Back</button>
+      <div style={{background:`linear-gradient(160deg,${headerFrom},${headerTo})`,padding:"24px 20px 28px",color:"#fff",position:"relative",overflow:"hidden",borderRadius:"0 0 24px 24px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <button onClick={onBack} style={{background:"rgba(255,255,255,.14)",border:"none",borderRadius:12,padding:"8px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,display:"flex",alignItems:"center",gap:6}}><ArrowLeft size={15}/> Back</button>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={shareImage} disabled={sharing} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:12,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:sharing?"default":"pointer",fontFamily:"inherit",fontSize:13,opacity:sharing?.7:1}}>{sharing?"…":"📤 Share"}</button>
-            <button onClick={downloadCSV} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:12,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>⬇️ CSV</button>
+            <button onClick={shareImage} disabled={sharing} style={{background:"rgba(255,255,255,.14)",border:"none",borderRadius:12,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:sharing?"default":"pointer",fontFamily:"inherit",fontSize:13,opacity:sharing?.7:1,display:"flex",alignItems:"center",gap:6}}><Share2 size={14}/> {sharing?"…":"Share"}</button>
+            <button onClick={downloadCSV} style={{background:"rgba(255,255,255,.14)",border:"none",borderRadius:12,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,display:"flex",alignItems:"center",gap:6}}><Download size={14}/> CSV</button>
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{fontSize:42,fontWeight:900,letterSpacing:"-1px"}}>{batchCode}</div>
-          {completed&&<span style={{fontSize:11,fontWeight:800,padding:"5px 12px",borderRadius:99,background:"rgba(255,255,255,.28)",whiteSpace:"nowrap"}}>✅ Completed</span>}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              <div style={{fontSize:42,fontWeight:900,letterSpacing:"-1px"}}>{batchCode}</div>
+              {completed&&<span style={{fontSize:11,fontWeight:800,padding:"5px 12px",borderRadius:99,background:"rgba(255,255,255,.22)",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5}}><CheckCircle2 size={12}/> Completed</span>}
+            </div>
+            <div style={{fontSize:13,opacity:.75,marginTop:4}}>{chapters.length} chapter{chapters.length===1?"":"s"}</div>
+          </div>
+          <CircularProgress pct={pct} size={104} strokeWidth={9} progressColor="#34d399" label={`${pct.toFixed(0)}%`} sublabel="Overall Progress"/>
         </div>
-        <div style={{fontSize:13,opacity:.8,marginTop:4,marginBottom:16}}>{chapters.length} chapters</div>
-        <div style={{display:"flex",gap:10,marginBottom:14}}>
-          {[{l:"Allotted",v:fmtHours(total)},{l:"Completed",v:fmtHours(done)},{l:"Remaining",v:fmtHours(Math.max(0,total-done))}].map(s=>(
-            <div key={s.l} style={{flex:1,background:"rgba(255,255,255,.2)",borderRadius:12,padding:"10px 4px",textAlign:"center"}}>
-              <div style={{fontSize:15,fontWeight:800}}>{s.v}</div>
-              <div style={{fontSize:9,opacity:.8,fontWeight:600,marginTop:2}}>{s.l}</div>
+        <div style={{display:"flex",gap:10,margin:"20px 0 14px"}}>
+          {[{l:"Allotted",v:fmtHours(total),Icon:Clock},{l:"Completed",v:fmtHours(done),Icon:CheckCircle2},{l:"Remaining",v:fmtHours(remaining),Icon:Hourglass}].map(s=>(
+            <div key={s.l} style={{flex:1,background:"rgba(255,255,255,.12)",borderRadius:14,padding:"12px 4px",textAlign:"center"}}>
+              <div style={{display:"flex",justifyContent:"center",marginBottom:6}}><s.Icon size={15} color="rgba(255,255,255,.85)"/></div>
+              <div style={{fontSize:16,fontWeight:800}}>{s.v}</div>
+              <div style={{fontSize:10,opacity:.75,fontWeight:600,marginTop:2}}>{s.l}</div>
             </div>
           ))}
         </div>
-        <PBar pct={pct}/>
-        <div style={{fontSize:12,opacity:.8,marginTop:5,fontWeight:600}}>{pct.toFixed(0)}% overall progress</div>
+        <PBar pct={pct} color="#34d399" bg="rgba(255,255,255,.18)"/>
+        <div style={{fontSize:12,opacity:.85,marginTop:8,fontWeight:600}}>{pct.toFixed(0)}% complete · <span style={{color:pct>100?"#fca5a5":pct>=80?"#fde68a":"#a7f3d0"}}>{STATUS[status].label}</span></div>
       </div>
       <div style={{padding:"20px 16px 80px"}}>
         <BatchHistorySection batchCode={batchCode} color={color} chapters={chapters}/>
@@ -1141,12 +1204,13 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
         })}
         <div style={{display:"flex",gap:10,marginTop:8}}>
           <button onClick={onToggleCompleted}
-            style={{flex:1,padding:"14px",background:completed?"#f1f5f9":"#fff",color:completed?"#475569":"#10b981",border:`2px solid ${completed?"#e2e8f0":"#bbf7d0"}`,borderRadius:16,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:completed?"none":"0 2px 8px rgba(16,185,129,.1)"}}>
-            {completed?"↩️ Mark as Running":"✅ Chapter Completed"}
+            style={{flex:1,padding:"14px",background:completed?"#f1f5f9":"#fff",color:completed?"#475569":"#10b981",border:`2px solid ${completed?"#e2e8f0":"#bbf7d0"}`,borderRadius:16,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:completed?"none":"0 2px 8px rgba(16,185,129,.1)",display:"flex",alignItems:"center",justifyContent:"center",gap:8,textAlign:"center"}}>
+            {completed?<Clock size={17}/>:<CheckCircle2 size={17}/>}
+            {completed?"Mark as Running":"Chapter Completed"}
           </button>
           <button onClick={onDeleteBatch}
-            style={{flex:1,padding:"14px",background:"#fff",color:"#ef4444",border:"2px solid #fecaca",borderRadius:16,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(239,68,68,.1)"}}>
-            🗑️ Delete This Entire Batch
+            style={{flex:1,padding:"14px",background:"#fff",color:"#ef4444",border:"2px solid #fecaca",borderRadius:16,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(239,68,68,.1)",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            <Trash2 size={17}/> Delete This Entire Batch
           </button>
         </div>
       </div>
@@ -1191,7 +1255,7 @@ function BatchHistorySection({batchCode,color,chapters}) {
   return(
     <div style={{background:"#fff",borderRadius:20,padding:18,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,.06)"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-        <div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>📅 Hours History</div>
+        <div style={{fontSize:15,fontWeight:800,color:"#0f172a",display:"flex",alignItems:"center",gap:7}}><Calendar size={16}/> Hours History</div>
         <select value={selMonth} onChange={e=>setSelMonth(e.target.value)}
           style={{background:"#f1f5f9",border:"none",borderRadius:99,padding:"6px 12px",fontWeight:700,fontSize:12,fontFamily:"inherit",outline:"none",color:"#475569"}}>
           {availableMonths.map(m=><option key={m} value={m}>{monthLabel(m)}</option>)}
@@ -1214,7 +1278,7 @@ function BatchHistorySection({batchCode,color,chapters}) {
             <div key={weekStart} style={{border:"1.5px solid #f1f5f9",borderRadius:12,overflow:"hidden"}}>
               <div onClick={()=>setExpandedWeek(open?null:weekStart)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",cursor:"pointer",background:"#f8fafc"}}>
                 <span style={{fontSize:12,fontWeight:700,color:"#475569"}}>Week of {fmtDate(weekStart)}</span>
-                <span style={{fontSize:12,fontWeight:800,color}}>{fmtHours(data.total)} {open?"▲":"▼"}</span>
+                <span style={{fontSize:12,fontWeight:800,color,display:"flex",alignItems:"center",gap:4}}>{fmtHours(data.total)} {open?<ChevronUp size={14}/>:<ChevronDown size={14}/>}</span>
               </div>
               {open&&(
                 <div style={{padding:"6px 12px 10px"}}>
@@ -1248,8 +1312,8 @@ function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
           <div style={{fontSize:15,fontWeight:800,color:"#0f172a",flex:1}}>{chapter.name}</div>
           <div style={{display:"flex",gap:6}}>
-            <button onClick={onEdit} style={{background:"#eef2ff",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✏️</button>
-            <button onClick={onDelete} style={{background:"#fee2e2",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>🗑️</button>
+            <button onClick={onEdit} style={{background:"#eef2ff",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Pencil size={14} color="#6366f1"/></button>
+            <button onClick={onDelete} style={{background:"#fee2e2",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Trash2 size={14} color="#ef4444"/></button>
           </div>
         </div>
         {/* Stats */}
@@ -1268,19 +1332,19 @@ function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
         {/* FIX #1 & #5: Topics from master */}
         {topics.length>0&&(
           <div style={{borderTop:"1px solid #f1f5f9",paddingTop:10,marginBottom:10}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#475569",marginBottom:6}}>📋 Topics</div>
+            <div style={{fontSize:11,fontWeight:700,color:"#475569",marginBottom:6,display:"flex",alignItems:"center",gap:5}}><ClipboardList size={12}/> Topics</div>
             <div style={{display:"flex",flexDirection:"column",gap:4}}>
               {visibleTopics.map((t,i)=>(
                 <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:t.done?"#f0fdf4":"#f8fafc",border:`1px solid ${t.done?"#bbf7d0":"#e2e8f0"}`}}>
                   <span style={{fontSize:11,color:t.done?"#94a3b8":"#1e293b",textDecoration:t.done?"line-through":"none",fontWeight:600,flex:1}}>{i+1}. {t.name}</span>
-                  {t.done&&<span style={{fontSize:9,color:"#10b981",fontWeight:700}}>✓</span>}
+                  {t.done&&<CheckCircle2 size={12} color="#10b981"/>}
                 </div>
               ))}
             </div>
             {topics.length>SHOW_LIMIT&&(
               <button onClick={()=>setShowAllTopics(!showAllTopics)}
-                style={{marginTop:6,background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#6366f1",fontWeight:700,padding:"4px 0",fontFamily:"inherit"}}>
-                {showAllTopics?`▲ Show less`:`▼ Show ${topics.length-SHOW_LIMIT} more topics`}
+                style={{marginTop:6,background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#6366f1",fontWeight:700,padding:"4px 0",fontFamily:"inherit",display:"flex",alignItems:"center",gap:4}}>
+                {showAllTopics?<ChevronUp size={13}/>:<ChevronDown size={13}/>} {showAllTopics?"Show less":`Show ${topics.length-SHOW_LIMIT} more topics`}
               </button>
             )}
           </div>
@@ -1289,8 +1353,8 @@ function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
       {/* FIX #2: "Tap to open" as a proper colored banner at the bottom */}
       <div onClick={onOpen}
         style={{background:`linear-gradient(135deg,${color},${color}dd)`,padding:"11px 18px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:0}}>
-        <span style={{color:"#fff",fontSize:13,fontWeight:700}}>📖 Open Chapter</span>
-        <span style={{color:"rgba(255,255,255,.85)",fontSize:12,fontWeight:600}}>Log hours, topics & notes →</span>
+        <span style={{color:"#fff",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}><BookOpen size={15}/> Open Chapter</span>
+        <span style={{color:"rgba(255,255,255,.85)",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>Log hours, topics & notes <ChevronRight size={13}/></span>
       </div>
     </div>
   );
@@ -1412,38 +1476,39 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
 
   return(
     <div style={{minHeight:"100vh",background:"#f8fafc"}}>
-      <div style={{background:`linear-gradient(135deg,${color},${color}bb)`,padding:"24px 20px 28px",color:"#fff",position:"relative",overflow:"hidden",borderRadius:"0 0 24px 24px"}}>
+      <div style={{background:`linear-gradient(160deg,${shadeColor(color,0.72)},${shadeColor(color,0.82)})`,padding:"24px 20px 28px",color:"#fff",position:"relative",overflow:"hidden",borderRadius:"0 0 24px 24px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-          <button onClick={onBack} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:12,padding:"8px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>← Back</button>
+          <button onClick={onBack} style={{background:"rgba(255,255,255,.14)",border:"none",borderRadius:12,padding:"8px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,display:"flex",alignItems:"center",gap:6}}><ArrowLeft size={15}/> Back</button>
           <SyncBadge status={syncStatus}/>
         </div>
         <div style={{fontSize:38,fontWeight:900,letterSpacing:"-1px"}}>{chapter.batchCode}</div>
         <div style={{fontSize:20,fontWeight:700,marginTop:4,marginBottom:18,lineHeight:1.3}}>{chapter.name}</div>
         <div style={{display:"flex",gap:10,marginBottom:14}}>
-          {[{l:"Allotted",v:fmtHours(chapter.totalHours)},{l:"Taken",v:fmtHours(chapter.completedHours)},{l:"Extra",v:fmtHours(chapter.extraHours||0)},{l:"Left",v:fmtHours(remaining)}].map(s=>(
-            <div key={s.l} style={{flex:1,background:"rgba(255,255,255,.2)",borderRadius:12,padding:"10px 4px",textAlign:"center"}}>
+          {[{l:"Allotted",v:fmtHours(chapter.totalHours),Icon:Clock},{l:"Taken",v:fmtHours(chapter.completedHours),Icon:CheckCircle2},{l:"Extra",v:fmtHours(chapter.extraHours||0),Icon:Star},{l:"Left",v:fmtHours(remaining),Icon:Hourglass}].map(s=>(
+            <div key={s.l} style={{flex:1,background:"rgba(255,255,255,.14)",borderRadius:12,padding:"10px 4px",textAlign:"center"}}>
+              <div style={{display:"flex",justifyContent:"center",marginBottom:4}}><s.Icon size={13} color="rgba(255,255,255,.8)"/></div>
               <div style={{fontSize:14,fontWeight:800}}>{s.v}</div>
               <div style={{fontSize:9,opacity:.8,fontWeight:600,marginTop:2}}>{s.l}</div>
             </div>
           ))}
         </div>
-        <PBar pct={pct}/>
+        <PBar pct={pct} color="#34d399" bg="rgba(255,255,255,.18)"/>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,opacity:.9,fontWeight:600}}>
           <span>{pct.toFixed(0)}% complete</span><span>{STATUS[status].label}</span>
         </div>
-        {status==="exceeded"&&<div style={{marginTop:10,background:"rgba(239,68,68,.3)",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700}}>⚠️ Exceeded by {fmtHours(chapter.completedHours-chapter.totalHours)}</div>}
+        {status==="exceeded"&&<div style={{marginTop:10,background:"rgba(239,68,68,.3)",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:7}}><AlertTriangle size={15}/> Exceeded by {fmtHours(chapter.completedHours-chapter.totalHours)}</div>}
       </div>
 
       <div style={{padding:"20px 16px 80px",maxWidth:560,margin:"0 auto"}}>
-        <Sec title="📅 Log Class Hours">
+        <Sec title={<span style={{display:"flex",alignItems:"center",gap:8}}><Calendar size={16}/> Log Class Hours</span>}>
           <div style={{marginBottom:12}}>
             <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Log Time</label>
             {/* NEW: choose whether the number typed below means hours or minutes */}
             <div style={{display:"flex",gap:6,marginBottom:8}}>
               {["hours","minutes"].map(u=>(
                 <button key={u} onClick={()=>setLogUnit(u)}
-                  style={{flex:1,padding:"8px",borderRadius:10,border:`2px solid ${logUnit===u?color:"#e2e8f0"}`,background:logUnit===u?`${color}15`:"#fff",fontWeight:700,fontSize:12,color:logUnit===u?color:"#64748b",cursor:"pointer",fontFamily:"inherit"}}>
-                  {u==="hours"?"⏱ Hours":"⏳ Minutes"}
+                  style={{flex:1,padding:"8px",borderRadius:10,border:`2px solid ${logUnit===u?color:"#e2e8f0"}`,background:logUnit===u?`${color}15`:"#fff",fontWeight:700,fontSize:12,color:logUnit===u?color:"#64748b",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+                  {u==="hours"?<Clock size={13}/>:<Hourglass size={13}/>} {u==="hours"?"Hours":"Minutes"}
                 </button>
               ))}
             </div>
@@ -1457,13 +1522,13 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
                   style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
                 {logH&&<div style={{fontSize:11,color:color,marginTop:3,fontWeight:700}}>= {fmtHours(toHoursFromInput(logH,logUnit))}</div>}
               </div>
-              <button onClick={logHours} style={{background:`linear-gradient(135deg,${color},${color}bb)`,color:"#fff",border:"none",borderRadius:12,padding:"0 22px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:15,boxShadow:`0 4px 14px ${color}44`,flexShrink:0}}>+ Log</button>
+              <button onClick={logHours} style={{background:`linear-gradient(135deg,${color},${color}bb)`,color:"#fff",border:"none",borderRadius:12,padding:"0 20px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:15,boxShadow:`0 4px 14px ${color}44`,flexShrink:0,display:"flex",alignItems:"center",gap:6}}><Plus size={16}/> Log</button>
             </div>
 
             {/* FIX #4: Show auto-extra warning */}
             {wouldExceed&&logHoursVal>0&&(
               <div style={{background:"linear-gradient(135deg,#fff7ed,#ffedd5)",border:"2px solid #fed7aa",borderRadius:12,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:18}}>⚠️</span>
+                <AlertTriangle size={18} color="#ea580c"/>
                 <div>
                   <div style={{fontSize:12,fontWeight:800,color:"#c2410c"}}>This will exceed allotted hours!</div>
                   <div style={{fontSize:11,color:"#ea580c",marginTop:2}}>{fmtHours(autoExtraAmount)} will be auto-marked as extra hours</div>
@@ -1473,13 +1538,13 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
 
             {/* FIX #3: Date and Period/Note on separate rows — no overlap */}
             <div style={{marginBottom:6}}>
-              <label style={{display:"block",fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4}}>📅 Date</label>
+              <label style={{display:"block",fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4,display:"flex",alignItems:"center",gap:5}}><Calendar size={12}/> Date</label>
               <input type="date" value={logDate}
                 onChange={e=>setLogDate(e.target.value)}
                 style={{width:"100%",padding:"10px 12px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
             </div>
             <div>
-              <label style={{display:"block",fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4}}>📝 Period / Note</label>
+              <label style={{display:"block",fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4,display:"flex",alignItems:"center",gap:5}}><FileText size={12}/> Period / Note</label>
               <input type="text" value={logNote}
                 onChange={e=>setLogNote(e.target.value)}
                 placeholder="e.g. Period 3"
@@ -1489,13 +1554,13 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
 
           {/* Extra Hours section */}
           <div style={{background:"linear-gradient(135deg,#fffbeb,#fef9c3)",border:"2px solid #fde68a",borderRadius:14,padding:"16px"}}>
-            <div style={{fontSize:13,fontWeight:800,color:"#92400e",marginBottom:10}}>⭐ Extra Hours (Beyond Allotted)</div>
+            <div style={{fontSize:13,fontWeight:800,color:"#92400e",marginBottom:10,display:"flex",alignItems:"center",gap:6}}><Star size={14}/> Extra Hours (Beyond Allotted)</div>
             {/* NEW: choose whether the number typed below means hours or minutes */}
             <div style={{display:"flex",gap:6,marginBottom:8}}>
               {["hours","minutes"].map(u=>(
                 <button key={u} onClick={()=>setExtraUnit(u)}
-                  style={{flex:1,padding:"7px",borderRadius:9,border:`2px solid ${extraUnit===u?"#d97706":"#fde68a"}`,background:extraUnit===u?"#fde68a55":"#fffef5",fontWeight:700,fontSize:12,color:extraUnit===u?"#92400e":"#a16207",cursor:"pointer",fontFamily:"inherit"}}>
-                  {u==="hours"?"⏱ Hours":"⏳ Minutes"}
+                  style={{flex:1,padding:"7px",borderRadius:9,border:`2px solid ${extraUnit===u?"#d97706":"#fde68a"}`,background:extraUnit===u?"#fde68a55":"#fffef5",fontWeight:700,fontSize:12,color:extraUnit===u?"#92400e":"#a16207",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+                  {u==="hours"?<Clock size={12}/>:<Hourglass size={12}/>} {u==="hours"?"Hours":"Minutes"}
                 </button>
               ))}
             </div>
@@ -1508,26 +1573,30 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
                   style={{width:"100%",padding:"11px 14px",border:"2px solid #fde68a",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fffef5",boxSizing:"border-box"}}/>
                 {extraH&&<div style={{fontSize:11,color:"#92400e",marginTop:3,fontWeight:700}}>= {fmtHours(toHoursFromInput(extraH,extraUnit))}</div>}
               </div>
-              <button onClick={logExtra} style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",border:"none",borderRadius:12,padding:"0 20px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:14,boxShadow:"0 4px 14px rgba(245,158,11,.3)",flexShrink:0}}>+ Add</button>
+              <button onClick={logExtra} style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"#fff",border:"none",borderRadius:12,padding:"0 18px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:14,boxShadow:"0 4px 14px rgba(245,158,11,.3)",flexShrink:0,display:"flex",alignItems:"center",gap:5}}><Plus size={15}/> Add</button>
             </div>
           </div>
         </Sec>
 
         {logs.length>0&&(
-          <Sec title={`🕐 Hour Logs (${logs.length} entries)`}>
-            <button onClick={()=>setShowLogs(!showLogs)} style={{background:"#eef2ff",color:"#6366f1",border:"none",borderRadius:10,padding:"8px 16px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,marginBottom:showLogs?12:0}}>
-              {showLogs?"Hide Logs ▲":"Show All Logs ▼"}
+          <Sec title={<span style={{display:"flex",alignItems:"center",gap:8}}><Clock size={16}/> Hour Logs ({logs.length} entries)</span>}>
+            <button onClick={()=>setShowLogs(!showLogs)} style={{background:"#eef2ff",color:"#6366f1",border:"none",borderRadius:10,padding:"8px 16px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,marginBottom:showLogs?12:0,display:"flex",alignItems:"center",gap:6}}>
+              {showLogs?<ChevronUp size={14}/>:<ChevronDown size={14}/>} {showLogs?"Hide Logs":"Show All Logs"}
             </button>
             {showLogs&&(
               <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:8}}>
                 {[...logs].reverse().map(log=>(
                   <div key={log.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,background:log.type==="extra"?"linear-gradient(135deg,#fffbeb,#fef9c3)":"#f8fafc",border:`2px solid ${log.type==="extra"?"#fde68a":"#e2e8f0"}`}}>
                     <div style={{flex:1}}>
-                      <div style={{fontSize:14,fontWeight:800,color:log.type==="extra"?"#92400e":color}}>{fmtHours(log.hours)} {log.type==="extra"?"⭐ Extra":"🕐 Regular"}{log.extraNote?<span style={{fontSize:11,fontWeight:600,color:"#f97316",marginLeft:6}}>{log.extraNote}</span>:null}</div>
-                      <div style={{fontSize:12,color:"#64748b",marginTop:2}}>📅 {fmtDate(log.date)}{log.note?" · "+log.note:""}</div>
+                      <div style={{fontSize:14,fontWeight:800,color:log.type==="extra"?"#92400e":color,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                        {fmtHours(log.hours)}
+                        <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:12}}>{log.type==="extra"?<Star size={12}/>:<Clock size={12}/>}{log.type==="extra"?"Extra":"Regular"}</span>
+                        {log.extraNote?<span style={{fontSize:11,fontWeight:600,color:"#f97316"}}>{log.extraNote}</span>:null}
+                      </div>
+                      <div style={{fontSize:12,color:"#64748b",marginTop:2,display:"flex",alignItems:"center",gap:5}}><Calendar size={11}/> {fmtDate(log.date)}{log.note?" · "+log.note:""}</div>
                     </div>
-                    <button onClick={()=>setEditLog({...log,hours:String(log.hours)})} style={{background:"#eef2ff",border:"none",borderRadius:9,width:30,height:30,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>✏️</button>
-                    <button onClick={()=>deleteLog(log.id)} style={{background:"#fee2e2",border:"none",borderRadius:9,width:30,height:30,cursor:"pointer",fontSize:13,color:"#ef4444",display:"flex",alignItems:"center",justifyContent:"center"}}>🗑️</button>
+                    <button onClick={()=>setEditLog({...log,hours:String(log.hours)})} style={{background:"#eef2ff",border:"none",borderRadius:9,width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Pencil size={13} color="#6366f1"/></button>
+                    <button onClick={()=>deleteLog(log.id)} style={{background:"#fee2e2",border:"none",borderRadius:9,width:30,height:30,cursor:"pointer",color:"#ef4444",display:"flex",alignItems:"center",justifyContent:"center"}}><Trash2 size={13}/></button>
                   </div>
                 ))}
               </div>
@@ -1536,7 +1605,7 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
         )}
 
         {editLog&&(
-          <Modal title="✏️ Edit Log Entry" onClose={()=>setEditLog(null)}>
+          <Modal title="Edit Log Entry" onClose={()=>setEditLog(null)}>
             <div style={{marginBottom:12}}>
               <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Hours</label>
               <input type="number" value={editLog.hours} onChange={e=>setEditLog({...editLog,hours:e.target.value})} step={0.0833} style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
@@ -1557,7 +1626,7 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
           </Modal>
         )}
 
-        <Sec title="📋 Topics">
+        <Sec title={<span style={{display:"flex",alignItems:"center",gap:8}}><ClipboardList size={16}/> Topics</span>}>
           {(chapter.topics||[]).length===0&&<div style={{textAlign:"center",padding:"16px",color:"#94a3b8",fontSize:14}}>No topics yet.</div>}
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
             {(chapter.topics||[]).map((t,i)=>{
@@ -1567,8 +1636,8 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
                   <input type="checkbox" checked={t.done} onChange={()=>toggleTopic(t.id)} style={{width:18,height:18,accentColor:color,cursor:"pointer",flexShrink:0}}/>
                   <span style={{flex:1,fontSize:14,color:t.done?"#64748b":"#1e293b",textDecoration:t.done?"line-through":"none",fontWeight:t.done?500:600}}>{i+1}. {t.name}</span>
                   {isLast&&<span style={{background:color,color:"#fff",fontSize:10,fontWeight:700,padding:"2px 10px",borderRadius:99,flexShrink:0}}>Last Done</span>}
-                  <button onClick={()=>markLast(t.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,opacity:.5,padding:0,flexShrink:0}}>📍</button>
-                  <button onClick={()=>deleteTopic(t.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:17,color:"#ef4444",opacity:.5,padding:0,flexShrink:0}}>×</button>
+                  <button onClick={()=>markLast(t.id)} style={{background:"none",border:"none",cursor:"pointer",opacity:.5,padding:0,flexShrink:0,display:"flex"}}><MapPin size={16} color={isLast?color:"#64748b"}/></button>
+                  <button onClick={()=>deleteTopic(t.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#ef4444",opacity:.6,padding:0,flexShrink:0,display:"flex"}}><X size={16}/></button>
                 </div>
               );
             })}
@@ -1579,14 +1648,14 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
               onKeyDown={e=>{if(e.key==="Enter")addTopic();}}
               placeholder="Add a topic..."
               style={{flex:1,padding:"11px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff"}}/>
-            <button onClick={addTopic} style={{background:`linear-gradient(135deg,${color},${color}bb)`,color:"#fff",border:"none",borderRadius:12,padding:"0 18px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14}}>+ Add</button>
+            <button onClick={addTopic} style={{background:`linear-gradient(135deg,${color},${color}bb)`,color:"#fff",border:"none",borderRadius:12,padding:"0 16px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14,display:"flex",alignItems:"center",gap:5}}><Plus size={15}/> Add</button>
           </div>
         </Sec>
 
-        <Sec title="📝 Notes">
+        <Sec title={<span style={{display:"flex",alignItems:"center",gap:8}}><FileText size={16}/> Notes</span>}>
           <textarea value={notes} onChange={e=>handleNotes(e.target.value)} placeholder="Notes, derivations, student doubts..."
             style={{width:"100%",minHeight:120,padding:"14px",border:"2px solid #e2e8f0",borderRadius:14,fontSize:14,fontFamily:"inherit",resize:"vertical",outline:"none",background:"#fff",lineHeight:1.8,boxSizing:"border-box"}}/>
-          <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>☁️ Auto-saved to cloud</div>
+          <div style={{fontSize:11,color:"#94a3b8",marginTop:4,display:"flex",alignItems:"center",gap:5}}><Cloud size={12}/> Auto-saved to cloud</div>
         </Sec>
       </div>
     </div>
@@ -1883,7 +1952,7 @@ export default function App() {
         completed={completedBatches.includes(batchView)}
         onToggleCompleted={()=>toggleBatchCompleted(batchView)}/>
       {editChapter&&(
-        <Modal title="✏️ Edit Chapter" onClose={()=>setEditChapter(null)}>
+        <Modal title={<span style={{display:"flex",alignItems:"center",gap:8}}><Pencil size={17}/> Edit Chapter</span>} onClose={()=>setEditChapter(null)}>
           <EditChapterForm chapter={editChapter} onSave={editBatchChapterSave} onClose={()=>setEditChapter(null)}/>
         </Modal>
       )}
@@ -1896,7 +1965,7 @@ export default function App() {
     <div style={{maxWidth:560,margin:"0 auto",paddingBottom:72,minHeight:"100vh"}}>
       {loading?(
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"80vh"}}>
-          <div style={{fontSize:44,marginBottom:16}}>☁️</div>
+          <div style={{marginBottom:16}}><Cloud size={44} color="#6366f1" strokeWidth={1.5}/></div>
           <div style={{fontWeight:800,fontSize:16,color:"#6366f1"}}>Loading your data...</div>
           <div style={{fontSize:13,color:"#94a3b8",marginTop:6}}>Fetching from cloud</div>
         </div>
@@ -1936,7 +2005,7 @@ function EditChapterForm({chapter, onSave, onClose}) {
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
         <button onClick={()=>{if(name&&hours)onSave({name,totalHours:parseFloat(hours)});}}
-          style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Save ✓</button>
+          style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}><span style={{display:"flex",alignItems:"center",gap:6}}><CheckCircle2 size={15}/> Save</span></button>
       </div>
     </>
   );
