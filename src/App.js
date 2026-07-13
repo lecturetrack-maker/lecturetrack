@@ -62,16 +62,18 @@ function toHoursFromInput(raw, unit) {
 function getStatus(completed,total) {
   if (!total) return "none";
   const p=(completed/total)*100;
-  if (p>100) return "exceeded";
+  // FIX: reaching or passing 100% (including any extra hours) now reads as "Completed"
+  // instead of "Near Limit" (at exactly 100%) or "Exceeded" (red, past 100%).
+  if (p>=100) return "completed";
   if (p>=80) return "warning";
   return "ok";
 }
 
 const STATUS = {
-  ok:      {color:"#10b981",label:"On Track"},
-  warning: {color:"#f59e0b",label:"Near Limit"},
-  exceeded:{color:"#ef4444",label:"Exceeded"},
-  none:    {color:"#94a3b8",label:"Not Started"},
+  ok:       {color:"#10b981",label:"On Track"},
+  warning:  {color:"#f59e0b",label:"Near Limit"},
+  completed:{color:"#10b981",label:"Completed"},
+  none:     {color:"#94a3b8",label:"Not Started"},
 };
 
 const BATCH_COLORS=["#6366f1","#10b981","#f59e0b","#ef4444","#3b82f6","#8b5cf6","#ec4899","#14b8a6","#f97316","#06b6d4"];
@@ -588,6 +590,30 @@ function CircularProgress({pct,size=112,strokeWidth=10,trackColor="rgba(255,255,
   );
 }
 
+// NEW: compact, segmented-control-style toggle for choosing Hours vs Minutes when logging
+// time — smaller and more "switch-like" than the earlier full-width button pair.
+function UnitToggle({unit,onChange,activeColor="#6366f1",trackBg="#f1f5f9",activeBg="#fff"}) {
+  return(
+    <div style={{display:"inline-flex",background:trackBg,borderRadius:99,padding:3,gap:2,flexShrink:0}}>
+      {["hours","minutes"].map(u=>(
+        <button key={u} onClick={()=>onChange(u)} type="button"
+          style={{
+            display:"flex",alignItems:"center",gap:4,
+            padding:"5px 10px",borderRadius:99,border:"none",cursor:"pointer",fontFamily:"inherit",
+            background:unit===u?activeBg:"transparent",
+            color:unit===u?activeColor:"#94a3b8",
+            fontWeight:700,fontSize:11,
+            boxShadow:unit===u?"0 1px 4px rgba(0,0,0,.15)":"none",
+            transition:"all .15s"
+          }}>
+          {u==="hours"?<Clock size={11}/>:<Hourglass size={11}/>}
+          {u==="hours"?"Hrs":"Min"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ── FIX #6: BatchFormModal — isolated input state to prevent keyboard close ──
 // Each row uses a local ref-based approach + controlled state with stable callbacks
 function BatchRowInput({rowId, initialName, initialHours, onNameChange, onHoursChange, onRemove, showRemove, subject, masterChapters, index}) {
@@ -832,7 +858,7 @@ function AddChapterMasterModal({onSave,onClose,subject}) {
 
 // ── Home Tab ──────────────────────────────────────────────────────
 // UPDATED: accepts completedBatches so the batch list on the front page only shows running batches
-function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProfile,completedBatches=[]}) {
+function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProfile,completedBatches=[],onAddBatch}) {
   const batchChapters=chapters.filter(c=>c.batchCode);
   const totalAllotted=batchChapters.reduce((s,c)=>s+c.totalHours,0);
   const totalDoneAllTime=batchChapters.reduce((s,c)=>s+c.completedHours,0);
@@ -907,9 +933,14 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
       </div>
 
       <div style={{padding:"0 16px"}}>
-        {batches.length>0&&(
-          <div style={{marginBottom:20}}>
-            <div style={{fontSize:14,fontWeight:800,color:"#0f172a",marginBottom:10,display:"flex",alignItems:"center",gap:6}}><FolderOpen size={15} color="#0f172a"/> Your Batches</div>
+        <div style={{marginBottom:20}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{fontSize:14,fontWeight:800,color:"#0f172a",display:"flex",alignItems:"center",gap:6}}><FolderOpen size={15} color="#0f172a"/> Your Batches</div>
+            {/* NEW: rectangular "Add Batch" button, replacing the old per-card quick-log shortcut */}
+            <button onClick={onAddBatch} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"9px 16px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:12,boxShadow:"0 4px 12px rgba(99,102,241,.3)",display:"flex",alignItems:"center",gap:6}}><Plus size={14} strokeWidth={2.8}/> New Batch</button>
+          </div>
+
+          {batches.length>0&&(
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {batches.map((b,i)=>{
                 const bc=BATCH_COLORS[allBatches.indexOf(b)%BATCH_COLORS.length];
@@ -918,8 +949,6 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
                 const total=chs.reduce((s,c)=>s+c.totalHours,0);
                 const p=total>0?(done/total)*100:0;
                 const completed=p>=100;
-                // NEW: pick the chapter that still needs hours (or the last one) for the quick "+" shortcut
-                const quickChapter = chs.find(c=>c.completedHours<c.totalHours) || chs[chs.length-1];
                 return(
                   <div key={b} onClick={()=>onOpenBatch(b)} style={{background:"#fff",borderRadius:16,padding:"14px 16px",cursor:"pointer",borderLeft:`4px solid ${bc}`,boxShadow:"0 1px 8px rgba(0,0,0,.06)",display:"flex",alignItems:"center",gap:12}}>
                     <div style={{flex:1,minWidth:0}}>
@@ -933,24 +962,20 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
                       </div>
                       <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{p.toFixed(0)}% Progress</div>
                     </div>
-                    {/* NEW: quick "+" shortcut — jumps straight into hour entry, skipping the batch page */}
-                    {quickChapter&&(
-                      <button onClick={e=>{e.stopPropagation();onOpenChapter(quickChapter.id);}} title="Quick log hours"
-                        style={{width:34,height:34,borderRadius:"50%",background:bc,color:"#fff",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 3px 10px ${bc}55`}}><Plus size={18} strokeWidth={2.6}/></button>
-                    )}
-                    <ChevronRight size={18} color="#cbd5e1"/>
+                    {/* NEW: bold, clearly-tappable chevron indicating the row opens the batch */}
+                    <ChevronRight size={24} color="#64748b" strokeWidth={3}/>
                   </div>
                 );
               })}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {batchChapters.length===0&&(
           <div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}>
             <div style={{marginBottom:16,display:"flex",justifyContent:"center"}}><Inbox size={48} strokeWidth={1.5}/></div>
             <div style={{fontWeight:800,fontSize:18,color:"#475569",marginBottom:8}}>No batches yet</div>
-            <div style={{fontSize:14}}>Go to Batches tab to add your first batch</div>
+            <div style={{fontSize:14}}>Tap "New Batch" above to add your first one</div>
           </div>
         )}
 
@@ -1189,8 +1214,7 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
             </div>
           ))}
         </div>
-        <PBar pct={pct} color="#34d399" bg="rgba(255,255,255,.18)"/>
-        <div style={{fontSize:12,opacity:.85,marginTop:8,fontWeight:600}}>{pct.toFixed(0)}% complete · <span style={{color:pct>100?"#fca5a5":pct>=80?"#fde68a":"#a7f3d0"}}>{STATUS[status].label}</span></div>
+        <div style={{fontSize:12,opacity:.85,marginTop:4,fontWeight:600}}>{pct.toFixed(0)}% complete · <span style={{color:status==="completed"?"#6ee7b7":status==="warning"?"#fde68a":"#e2e8f0"}}>{STATUS[status].label}</span></div>
       </div>
       <div style={{padding:"20px 16px 80px"}}>
         <BatchHistorySection batchCode={batchCode} color={color} chapters={chapters}/>
@@ -1496,21 +1520,16 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
         <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,opacity:.9,fontWeight:600}}>
           <span>{pct.toFixed(0)}% complete</span><span>{STATUS[status].label}</span>
         </div>
-        {status==="exceeded"&&<div style={{marginTop:10,background:"rgba(239,68,68,.3)",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:7}}><AlertTriangle size={15}/> Exceeded by {fmtHours(chapter.completedHours-chapter.totalHours)}</div>}
+        {chapter.completedHours>chapter.totalHours&&<div style={{marginTop:10,background:"rgba(239,68,68,.3)",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:7}}><AlertTriangle size={15}/> {fmtHours(chapter.completedHours-chapter.totalHours)} beyond allotted</div>}
       </div>
 
       <div style={{padding:"20px 16px 80px",maxWidth:560,margin:"0 auto"}}>
         <Sec title={<span style={{display:"flex",alignItems:"center",gap:8}}><Calendar size={16}/> Log Class Hours</span>}>
           <div style={{marginBottom:12}}>
-            <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Log Time</label>
-            {/* NEW: choose whether the number typed below means hours or minutes */}
-            <div style={{display:"flex",gap:6,marginBottom:8}}>
-              {["hours","minutes"].map(u=>(
-                <button key={u} onClick={()=>setLogUnit(u)}
-                  style={{flex:1,padding:"8px",borderRadius:10,border:`2px solid ${logUnit===u?color:"#e2e8f0"}`,background:logUnit===u?`${color}15`:"#fff",fontWeight:700,fontSize:12,color:logUnit===u?color:"#64748b",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
-                  {u==="hours"?<Clock size={13}/>:<Hourglass size={13}/>} {u==="hours"?"Hours":"Minutes"}
-                </button>
-              ))}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <label style={{fontSize:13,fontWeight:700,color:"#475569"}}>Log Time</label>
+              {/* NEW: compact toggle — choose whether the number below means hours or minutes */}
+              <UnitToggle unit={logUnit} onChange={setLogUnit} activeColor={color}/>
             </div>
             {/* Hours/Minutes input + Log button */}
             <div style={{display:"flex",gap:8,marginBottom:10}}>
@@ -1554,15 +1573,10 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
 
           {/* Extra Hours section */}
           <div style={{background:"linear-gradient(135deg,#fffbeb,#fef9c3)",border:"2px solid #fde68a",borderRadius:14,padding:"16px"}}>
-            <div style={{fontSize:13,fontWeight:800,color:"#92400e",marginBottom:10,display:"flex",alignItems:"center",gap:6}}><Star size={14}/> Extra Hours (Beyond Allotted)</div>
-            {/* NEW: choose whether the number typed below means hours or minutes */}
-            <div style={{display:"flex",gap:6,marginBottom:8}}>
-              {["hours","minutes"].map(u=>(
-                <button key={u} onClick={()=>setExtraUnit(u)}
-                  style={{flex:1,padding:"7px",borderRadius:9,border:`2px solid ${extraUnit===u?"#d97706":"#fde68a"}`,background:extraUnit===u?"#fde68a55":"#fffef5",fontWeight:700,fontSize:12,color:extraUnit===u?"#92400e":"#a16207",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
-                  {u==="hours"?<Clock size={12}/>:<Hourglass size={12}/>} {u==="hours"?"Hours":"Minutes"}
-                </button>
-              ))}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
+              <div style={{fontSize:13,fontWeight:800,color:"#92400e",display:"flex",alignItems:"center",gap:6}}><Star size={14}/> Extra Hours (Beyond Allotted)</div>
+              {/* NEW: compact toggle — choose whether the number below means hours or minutes */}
+              <UnitToggle unit={extraUnit} onChange={setExtraUnit} activeColor="#92400e" trackBg="#fde68a55" activeBg="#fffef5"/>
             </div>
             <div style={{display:"flex",gap:8}}>
               <div style={{flex:1}}>
@@ -1706,6 +1720,43 @@ export default function App() {
   const [showCongrats,setShowCongrats]=useState(false);
   // NEW: tracks which batch codes have been marked "Completed" so they can be hidden from the Home tab
   const [completedBatches,setCompletedBatches]=useState([]);
+
+  // NEW/FIX: phone back-button support. Without this, opening a batch or a chapter's
+  // detail page doesn't add anything to browser history, so the hardware/gesture back
+  // button has nothing "in-app" to undo and instead closes the whole app. We push a
+  // history entry each time we drill into a batch or chapter, and listen for the
+  // browser's back navigation (popstate) to close that view instead of exiting.
+  const detailIdRef=useRef(detailId);
+  const batchViewRef=useRef(batchView);
+  useEffect(()=>{ detailIdRef.current=detailId; },[detailId]);
+  useEffect(()=>{ batchViewRef.current=batchView; },[batchView]);
+
+  useEffect(()=>{
+    const handlePopState=()=>{
+      if(detailIdRef.current){
+        setDetailId(null);
+      } else if(batchViewRef.current){
+        setBatchView(null);
+      }
+      // else: already at the top level — let the back button behave normally
+    };
+    window.addEventListener("popstate",handlePopState);
+    return ()=>window.removeEventListener("popstate",handlePopState);
+  },[]);
+
+  // Wrapped navigation helpers that push a history entry when drilling in
+  const openBatchView=useCallback((code)=>{
+    window.history.pushState({ltView:"batch"},"");
+    setBatchView(code);
+  },[]);
+  const openDetail=useCallback((id)=>{
+    window.history.pushState({ltView:"detail"},"");
+    setDetailId(id);
+  },[]);
+  // "Back" actions go through history.back() so the popstate handler above is the
+  // single source of truth for closing a view — keeps the history stack accurate.
+  const goBackFromDetail=useCallback(()=>{ window.history.back(); },[]);
+  const goBackFromBatch=useCallback(()=>{ window.history.back(); },[]);
 
   useEffect(()=>{const t=setTimeout(()=>setSplashDone(true),2200);return()=>clearTimeout(t);},[]);
 
@@ -1903,7 +1954,13 @@ export default function App() {
       try{if(profile) localStorage.setItem(`lt_completed_${profile.code}`,JSON.stringify(next));}catch{}
       return next;
     });
-    setBatchView(null);
+    // If we're currently viewing the batch being deleted, consume the history entry
+    // that was pushed when it was opened (keeps the back-button stack accurate).
+    if(batchViewRef.current===batchCode){
+      window.history.back();
+    } else {
+      setBatchView(null);
+    }
   };
 
   const editBatchChapterSave=async data=>{
@@ -1937,7 +1994,7 @@ export default function App() {
   const detailChapter=chapters.find(c=>c.id===detailId);
   if(detailChapter) return(
     <><style>{STYLE}</style>
-    <DetailPage chapter={detailChapter} color={getBatchColor(detailChapter.batchCode)||"#6366f1"} onUpdate={updateChapter} onBack={()=>setDetailId(null)} syncStatus={syncStatus}/>
+    <DetailPage chapter={detailChapter} color={getBatchColor(detailChapter.batchCode)||"#6366f1"} onUpdate={updateChapter} onBack={goBackFromDetail} syncStatus={syncStatus}/>
     </>
   );
 
@@ -1946,8 +2003,8 @@ export default function App() {
     return(
       <><style>{STYLE}</style>
       <BatchPage batchCode={batchView} color={getBatchColor(batchView)} chapters={bChs} masterChapters={masterChapters}
-        onBack={()=>setBatchView(null)} onDeleteChapter={deleteChapter}
-        onEditChapter={c=>setEditChapter(c)} onOpenChapter={id=>setDetailId(id)}
+        onBack={goBackFromBatch} onDeleteChapter={deleteChapter}
+        onEditChapter={c=>setEditChapter(c)} onOpenChapter={openDetail}
         onDeleteBatch={()=>deleteBatch(batchView)}
         completed={completedBatches.includes(batchView)}
         onToggleCompleted={()=>toggleBatchCompleted(batchView)}/>
@@ -1971,8 +2028,8 @@ export default function App() {
         </div>
       ):(
         <>
-          {tab==="home"&&<HomeTab chapters={batchChapters} profile={profile} onOpenChapter={id=>setDetailId(id)} onOpenBatch={b=>setBatchView(b)} syncStatus={syncStatus} onGoProfile={()=>setTab("profile")} completedBatches={completedBatches}/>}
-          {tab==="batches"&&<BatchesTab chapters={batchChapters} onOpenBatch={b=>setBatchView(b)} onDeleteBatch={deleteBatch} onAddBatch={()=>setAddBatchOpen(true)} completedBatches={completedBatches}/>}
+          {tab==="home"&&<HomeTab chapters={batchChapters} profile={profile} onOpenChapter={openDetail} onOpenBatch={openBatchView} syncStatus={syncStatus} onGoProfile={()=>setTab("profile")} completedBatches={completedBatches} onAddBatch={()=>setAddBatchOpen(true)}/>}
+          {tab==="batches"&&<BatchesTab chapters={batchChapters} onOpenBatch={openBatchView} onDeleteBatch={deleteBatch} onAddBatch={()=>setAddBatchOpen(true)} completedBatches={completedBatches}/>}
           {tab==="chapters"&&<ChaptersTab masterChapters={masterChapters} onOpenMaster={c=>setEditMaster(c)} onAddMaster={()=>setAddMasterOpen(true)} onDeleteMaster={deleteMasterChapter}/>}
           {tab==="profile"&&<ProfileTab profile={profile} chapters={batchChapters} onLogout={logout} onUpdateProfile={p=>setProfile(p)}/>}
         </>
