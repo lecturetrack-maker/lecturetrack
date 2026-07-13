@@ -59,6 +59,38 @@ function toHoursFromInput(raw, unit) {
   return parseHours(raw);
 }
 
+// FIX: "Extra Hours" was being tracked as a separately-accumulated running number
+// (chapter.extraHours) that could drift out of sync with reality — e.g. logging
+// hours through the "Extra Hours" box always counted 100% of that entry as extra,
+// even if the chapter hadn't actually reached its allotted total yet. That produced
+// CSV rows showing "2h Extra" while "Remaining" was still a positive number, which
+// is a contradiction: a chapter can't simultaneously have hours left AND be over
+// its allotment. From now on, "Extra" is always derived directly from Taken vs
+// Allotted, so it can never disagree with Remaining or Progress %.
+function deriveExtraHours(completedHours, totalHours) {
+  return Math.max(0, roundToMinute((completedHours||0) - (totalHours||0)));
+}
+
+// FIX: recomputes, for every log entry, exactly how much of it was genuinely "beyond
+// allotted" at that point in the chapter's running total — processed in chronological
+// (date) order. This is used for month/week "Extra" breakdowns so that even historical
+// entries (logged before this fix, when the old logic could mis-tag an entry as fully
+// "extra" regardless of the running total) self-correct instead of staying wrong forever.
+function computeLogExtras(hourLogs, totalHours) {
+  const withIdx = hourLogs.map((l,i)=>({...l,_idx:i}));
+  withIdx.sort((a,b)=>{
+    const d = new Date(a.date) - new Date(b.date);
+    return d !== 0 ? d : a._idx - b._idx;
+  });
+  let cumulative = 0;
+  withIdx.forEach(l=>{
+    cumulative = roundToMinute(cumulative + l.hours);
+    l.extraAmount = totalHours>0 ? roundToMinute(Math.max(0, Math.min(l.hours, cumulative - totalHours))) : 0;
+  });
+  withIdx.sort((a,b)=>a._idx-b._idx);
+  return withIdx.map(({_idx,...rest})=>rest);
+}
+
 function getStatus(completed,total) {
   if (!total) return "none";
   const p=(completed/total)*100;
@@ -109,7 +141,8 @@ function buildCSV(chapters) {
   chapters.forEach(c=>{
     const rem=Math.max(0,c.totalHours-c.completedHours);
     const pct=c.totalHours>0?((c.completedHours/c.totalHours)*100).toFixed(1)+"%":"0%";
-    rows.push([c.batchCode||"",c.name,fmtHours(c.totalHours),fmtHours(c.completedHours),fmtHours(c.extraHours||0),fmtHours(rem),pct]);
+    // FIX: derive Extra directly from Taken vs Allotted so it can never disagree with Remaining
+    rows.push([c.batchCode||"",c.name,fmtHours(c.totalHours),fmtHours(c.completedHours),fmtHours(deriveExtraHours(c.completedHours,c.totalHours)),fmtHours(rem),pct]);
   });
   return rows.map(r=>r.map(v=>`"${v}"`).join(",")).join("\n");
 }
@@ -120,7 +153,12 @@ function monthLabel(key) { if(!key) return ""; const [y,m]=key.split("-"); retur
 
 function collectBatchLogs(chapters) {
   const all=[];
-  chapters.forEach(c=>{ (c.hourLogs||[]).forEach(l=>{ all.push({...l,chapterName:c.name}); }); });
+  chapters.forEach(c=>{
+    // FIX: recompute this chapter's log extras in date order (each chapter has its own
+    // allotment, so this must happen per-chapter before merging into the batch-wide list)
+    const recomputed=computeLogExtras(c.hourLogs||[], c.totalHours);
+    recomputed.forEach(l=>{ all.push({...l,chapterName:c.name}); });
+  });
   return all.sort((a,b)=>new Date(a.date)-new Date(b.date));
 }
 
@@ -156,10 +194,14 @@ function buildDateChapterRows(logs) {
 function monthlyTotals(chapters, mKey) {
   let taken=0, extra=0;
   chapters.forEach(c=>{
-    (c.hourLogs||[]).forEach(l=>{
+    // FIX: recompute each entry's true "beyond allotted" portion in date order,
+    // rather than trusting whatever was stored on the log at the time (which could
+    // be wrong for entries logged through the old "Extra Hours" box behavior).
+    const recomputed = computeLogExtras(c.hourLogs||[], c.totalHours);
+    recomputed.forEach(l=>{
       if(monthKey(l.date)===mKey){
         taken+=l.hours;
-        extra+= l.extraAmount!=null ? l.extraAmount : (l.type==="extra"?l.hours:0);
+        extra+=l.extraAmount||0;
       }
     });
   });
@@ -293,6 +335,120 @@ async function shareBatchImage(batchCode, color, chapters) {
 
 const MASTER = "__MASTER__";
 
+// NEW: single-chapter CSV export (reuses the same date-wise recompute logic as the
+// batch report, so the numbers are guaranteed consistent between the two).
+function buildChapterCSV(chapter) {
+  const total = chapter.totalHours;
+  const logs = collectBatchLogs([chapter]);
+  const rows = buildDateChapterRows(logs);
+  const out = [["Date","Hours Taken","Allotted","Remaining","Progress %"]];
+  rows.forEach(r=>{
+    const remaining = Math.max(0, total - r.cumulative);
+    const pct = total>0 ? ((r.cumulative/total)*100).toFixed(1)+"%" : "0%";
+    out.push([fmtDate(r.date), fmtHours(r.hours), fmtHours(total), fmtHours(remaining), pct]);
+  });
+  return out.map(r=>r.map(v=>`"${v}"`).join(",")).join("\n");
+}
+
+// NEW: single-chapter shareable PNG report card, mirroring shareBatchImage's layout.
+async function shareChapterImage(chapter, color) {
+  const total = chapter.totalHours;
+  const done = chapter.completedHours;
+  const remaining = Math.max(0, total-done);
+  const pct = total>0 ? (done/total)*100 : 0;
+  const logs = collectBatchLogs([chapter]);
+  const allRows = buildDateChapterRows(logs);
+  const rows = allRows.slice(0,10);
+
+  const W=720, headerH=250, rowH=40;
+  const H = headerH + 66 + Math.max(1,rows.length)*rowH + 36;
+  const canvas=document.createElement("canvas");
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext("2d");
+
+  ctx.fillStyle="#f8fafc"; ctx.fillRect(0,0,W,H);
+  const grad=ctx.createLinearGradient(0,0,W,headerH);
+  grad.addColorStop(0,color); grad.addColorStop(1,"#4338ca");
+  ctx.fillStyle=grad; ctx.fillRect(0,0,W,headerH);
+
+  ctx.fillStyle="#ffffff";
+  ctx.font="900 30px Sora, sans-serif";
+  ctx.fillText(chapter.name,32,50);
+  ctx.font="700 15px Sora, sans-serif";
+  ctx.globalAlpha=.85;
+  ctx.fillText(`${chapter.batchCode||""} · Hours Report`,32,76);
+  ctx.font="600 13px Sora, sans-serif";
+  ctx.globalAlpha=.7;
+  ctx.fillText(`Generated ${fmtDate(todayStr())} · LectureTrack`,32,98);
+  ctx.globalAlpha=1;
+
+  const stats=[["Allotted",fmtHours(total)],["Taken",fmtHours(done)],["Remaining",fmtHours(remaining)],["Progress",pct.toFixed(0)+"%"]];
+  const boxW=(W-64-3*16)/4;
+  stats.forEach((s,i)=>{
+    const x=32+i*(boxW+16);
+    ctx.fillStyle="rgba(255,255,255,.18)";
+    roundRect(ctx,x,116,boxW,78,14); ctx.fill();
+    ctx.fillStyle="#fff";
+    ctx.font="900 19px Sora, sans-serif";
+    ctx.fillText(s[1],x+14,153);
+    ctx.font="600 11px Sora, sans-serif";
+    ctx.globalAlpha=.75;
+    ctx.fillText(s[0],x+14,171);
+    ctx.globalAlpha=1;
+  });
+
+  ctx.fillStyle="rgba(255,255,255,.25)";
+  roundRect(ctx,32,206,W-64,10,5); ctx.fill();
+  ctx.fillStyle="#fff";
+  roundRect(ctx,32,206,Math.max(6,(W-64)*Math.min(pct,100)/100),10,5); ctx.fill();
+
+  let y=headerH+34;
+  ctx.fillStyle="#0f172a";
+  ctx.font="800 17px Sora, sans-serif";
+  ctx.fillText("Date-wise Breakdown",32,y);
+  y+=26;
+  ctx.font="700 12px Sora, sans-serif";
+  ctx.fillStyle="#94a3b8";
+  const colWidths=[0.28,0.24,0.24,0.24].map(f=>(W-64)*f);
+  const colX=[32];
+  for(let i=0;i<colWidths.length-1;i++) colX.push(colX[i]+colWidths[i]);
+  ["Date","Taken","Remaining","%"].forEach((h,i)=>ctx.fillText(h,colX[i],y));
+  y+=12;
+  ctx.strokeStyle="#e2e8f0"; ctx.beginPath(); ctx.moveTo(32,y); ctx.lineTo(W-32,y); ctx.stroke();
+  y+=24;
+
+  if(rows.length===0){
+    ctx.fillStyle="#94a3b8"; ctx.font="600 13px Sora, sans-serif";
+    ctx.fillText("No hours logged yet",32,y);
+  }
+  rows.forEach(r=>{
+    const rem=Math.max(0,total-r.cumulative);
+    const p= total>0 ? ((r.cumulative/total)*100).toFixed(0)+"%" : "0%";
+    ctx.fillStyle="#1e293b"; ctx.font="600 13px Sora, sans-serif";
+    [fmtDate(r.date), fmtHours(r.hours), fmtHours(rem), p].forEach((c,i)=>ctx.fillText(c,colX[i],y));
+    y+=rowH-14;
+    ctx.strokeStyle="#f1f5f9"; ctx.beginPath(); ctx.moveTo(32,y-7); ctx.lineTo(W-32,y-7); ctx.stroke();
+    y+=14;
+  });
+
+  return new Promise(resolve=>{
+    canvas.toBlob(async blob=>{
+      if(!blob){ resolve(); return; }
+      const safeName=chapter.name.replace(/[^a-z0-9]+/gi,"_");
+      const file=new File([blob],`${safeName}_hours.png`,{type:"image/png"});
+      try{
+        if(navigator.canShare && navigator.canShare({files:[file]})){
+          await navigator.share({files:[file],title:`${chapter.name} Hours Report`,text:`Hours report for ${chapter.name}`});
+        } else {
+          const a=document.createElement("a");
+          a.href=URL.createObjectURL(blob); a.download=`${safeName}_hours.png`; a.click();
+        }
+      }catch(e){ /* share cancelled by user — ignore */ }
+      resolve();
+    },"image/png");
+  });
+}
+
 function toRow(teacherCode,c) {
   return {
     id:c.id, teacher_code:teacherCode,
@@ -301,7 +457,7 @@ function toRow(teacherCode,c) {
     total_hours:c.totalHours||0, completed_hours:c.completedHours||0,
     extra_hours:c.extraHours||0, topics:c.topics||[],
     notes:c.notes||"", last_completed_topic:c.lastCompletedTopic||null,
-    hour_logs:c.hourLogs||[], updated_at:new Date().toISOString()
+    hour_logs:c.hourLogs||[], batch_teacher:c.batchTeacher||null, updated_at:new Date().toISOString()
   };
 }
 
@@ -312,7 +468,7 @@ function fromRow(r) {
     totalHours:r.total_hours||0, completedHours:r.completed_hours||0,
     extraHours:r.extra_hours||0, topics:r.topics||[],
     notes:r.notes||"", lastCompletedTopic:r.last_completed_topic,
-    hourLogs:r.hour_logs||[]
+    hourLogs:r.hour_logs||[], batchTeacher:r.batch_teacher||null
   };
 }
 
@@ -715,6 +871,7 @@ function BatchRowInput({rowId, initialName, initialHours, onNameChange, onHoursC
 // ── Batch Form Modal ──────────────────────────────────────────────
 function BatchFormModal({onSave,onClose,subject,masterChapters}) {
   const [batchCode,setBatchCode]=useState("");
+  const [teacherName,setTeacherName]=useState("");
   const [rows,setRows]=useState([{id:uid(),name:"",hours:""}]);
   // FIX #6: use refs to track current row data without re-rendering the inputs
   const rowDataRef = useRef({});
@@ -753,7 +910,7 @@ function BatchFormModal({onSave,onClose,subject,masterChapters}) {
       .map(r => rowDataRef.current[r.id] || {name:"",hours:""})
       .filter(r => r.name.trim() && parseFloat(r.hours)>0);
     if(validRows.length===0) return;
-    onSave({batchCode:batchCode.trim().toUpperCase(), rows:validRows});
+    onSave({batchCode:batchCode.trim().toUpperCase(), teacherName:teacherName.trim(), rows:validRows});
   };
 
   return(
@@ -761,6 +918,11 @@ function BatchFormModal({onSave,onClose,subject,masterChapters}) {
       <div style={{marginBottom:14}}>
         <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Batch Code / Name</label>
         <input value={batchCode} onChange={e=>setBatchCode(e.target.value.toUpperCase())} placeholder="e.g. X1, 11A, RISE"
+          style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
+      </div>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Teacher Name (optional)</label>
+        <input value={teacherName} onChange={e=>setTeacherName(e.target.value)} placeholder="e.g. Sreekutty"
           style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
       </div>
       <div style={{fontSize:13,fontWeight:700,color:"#475569",marginBottom:8}}>Chapters in this batch:</div>
@@ -1088,7 +1250,7 @@ function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
   const batchChapters=chapters.filter(c=>c.batchCode);
   const totalDone=batchChapters.reduce((s,c)=>s+c.completedHours,0);
   const totalAllotted=batchChapters.reduce((s,c)=>s+c.totalHours,0);
-  const totalExtra=batchChapters.reduce((s,c)=>s+(c.extraHours||0),0);
+  const totalExtra=batchChapters.reduce((s,c)=>s+deriveExtraHours(c.completedHours,c.totalHours),0);
   const batches=[...new Set(batchChapters.map(c=>c.batchCode))];
 
   const handlePhotoUpload=e=>{
@@ -1170,6 +1332,8 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
   // NEW: deep, professional header gradient built from the batch's accent color
   const headerFrom=shadeColor(color,0.72);
   const headerTo=shadeColor(color,0.82);
+  // NEW: teacher name entered when the batch was created (same for every chapter in it)
+  const teacherName=chapters.find(c=>c.batchTeacher)?.batchTeacher;
 
   const downloadCSV=()=>{
     const csv=buildBatchHistoryCSV(batchCode,chapters);
@@ -1201,7 +1365,7 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
               <div style={{fontSize:42,fontWeight:900,letterSpacing:"-1px"}}>{batchCode}</div>
               {completed&&<span style={{fontSize:11,fontWeight:800,padding:"5px 12px",borderRadius:99,background:"rgba(255,255,255,.22)",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5}}><CheckCircle2 size={12}/> Completed</span>}
             </div>
-            <div style={{fontSize:13,opacity:.75,marginTop:4}}>{chapters.length} chapter{chapters.length===1?"":"s"}</div>
+            <div style={{fontSize:13,opacity:.75,marginTop:4}}>{chapters.length} chapter{chapters.length===1?"":"s"}{teacherName?` · Teacher: ${teacherName}`:""}</div>
           </div>
           <CircularProgress pct={pct} size={104} strokeWidth={9} progressColor="#34d399" label={`${pct.toFixed(0)}%`} sublabel="Overall Progress"/>
         </div>
@@ -1258,7 +1422,7 @@ function BatchHistorySection({batchCode,color,chapters}) {
 
   const monthLogs=useMemo(()=>allLogs.filter(l=>monthKey(l.date)===selMonth),[allLogs,selMonth]);
   const monthTaken=monthLogs.reduce((s,l)=>s+l.hours,0);
-  const monthExtra=monthLogs.reduce((s,l)=>s+(l.extraAmount!=null?l.extraAmount:(l.type==="extra"?l.hours:0)),0);
+  const monthExtra=monthLogs.reduce((s,l)=>s+(l.extraAmount||0),0);
 
   const weeks=useMemo(()=>{
     const map={};
@@ -1342,7 +1506,7 @@ function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
         </div>
         {/* Stats */}
         <div style={{display:"flex",gap:8,marginBottom:10}}>
-          {[{l:"Allotted",v:fmtHours(chapter.totalHours)},{l:"Taken",v:fmtHours(chapter.completedHours),col:"#10b981"},{l:"Extra",v:fmtHours(chapter.extraHours||0),col:"#f59e0b"},{l:"Left",v:fmtHours(Math.max(0,chapter.totalHours-chapter.completedHours)),col:"#ef4444"}].map(s=>(
+          {[{l:"Allotted",v:fmtHours(chapter.totalHours)},{l:"Taken",v:fmtHours(chapter.completedHours),col:"#10b981"},{l:"Extra",v:fmtHours(deriveExtraHours(chapter.completedHours,chapter.totalHours)),col:"#f59e0b"},{l:"Left",v:fmtHours(Math.max(0,chapter.totalHours-chapter.completedHours)),col:"#ef4444"}].map(s=>(
             <div key={s.l} style={{flex:1,background:"#f8fafc",borderRadius:8,padding:"6px 4px",textAlign:"center"}}>
               <div style={{fontSize:12,fontWeight:800,color:s.col||"#0f172a"}}>{s.v}</div>
               <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,marginTop:1}}>{s.l}</div>
@@ -1384,6 +1548,24 @@ function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
   );
 }
 
+// NEW: quick-pick chips (e.g. 0.5h / 1h / 1.5h ...) so most log entries can be a single
+// tap instead of typing a number — the manual input below still works for anything custom.
+const PRESET_HOURS=[0.5,1,1.5,2,2.5,3];
+const PRESET_MINUTES=[10,15,20,30,45,60];
+function PresetChips({unit,onPick,color}) {
+  const opts=unit==="minutes"?PRESET_MINUTES:PRESET_HOURS;
+  return(
+    <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:10,paddingBottom:2}}>
+      {opts.map(v=>(
+        <button key={v} type="button" onClick={()=>onPick(v)}
+          style={{flexShrink:0,padding:"7px 13px",borderRadius:10,border:`1.5px solid ${color}33`,background:`${color}0f`,color,fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+          {unit==="minutes"?`${v}m`:`${v}h`}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // NEW/FIX: Sec moved to module scope (was previously re-created inside DetailPage on every
 // render, which made React treat it as a brand-new component type on every keystroke and
 // remount the whole section — including the input — dropping focus and closing the keyboard).
@@ -1409,6 +1591,7 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
   const [notes,setNotes]=useState(chapter.notes||"");
   const [showLogs,setShowLogs]=useState(false);
   const [editLog,setEditLog]=useState(null);
+  const [sharing,setSharing]=useState(false); // NEW: chapter-level Share/CSV
   const ntRef=useRef(null);
 
   // Keep local notes in sync if chapter changes from outside
@@ -1437,20 +1620,16 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
     // NEW: converts from whichever unit (hours or minutes) the person picked, always stores decimal hours
     const h=roundToMinute(toHoursFromInput(logH,logUnit));
     if(!h||h<=0) return;
-    // FIX #4: auto-detect extra portion
+    // FIX #4: auto-detect extra portion (informational per-entry tag only — the chapter's
+    // overall "Extra" total is always derived fresh from completedHours vs totalHours,
+    // so this no longer needs to be kept in sync with a separate running counter)
     const currentCompleted = chapter.completedHours;
     const newCompleted = roundToMinute(currentCompleted + h);
     const extraPortion = chapter.totalHours > 0
       ? roundToMinute(Math.max(0, newCompleted - chapter.totalHours))
       : 0;
     const newLog={id:uid(),hours:h,date:logDate,note:logNote,type:extraPortion>0?"extra":"regular",extraAmount:extraPortion,extraNote:extraPortion>0?`(includes ${fmtHours(extraPortion)} extra)`:""};
-    const updatedChapter = {
-      ...chapter,
-      completedHours: newCompleted,
-      extraHours: extraPortion > 0 ? roundToMinute((chapter.extraHours||0) + extraPortion) : chapter.extraHours,
-      hourLogs:[...logs,newLog]
-    };
-    onUpdate(updatedChapter);
+    onUpdate({...chapter,completedHours:newCompleted,hourLogs:[...logs,newLog]});
     setLogH("");setLogNote("");
   },[logH,logUnit,logDate,logNote,chapter,logs,onUpdate]);
 
@@ -1458,15 +1637,22 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
     // NEW: converts from whichever unit (hours or minutes) the person picked, always stores decimal hours
     const h=roundToMinute(toHoursFromInput(extraH,extraUnit));
     if(!h||h<=0) return;
-    const newLog={id:uid(),hours:h,date:logDate,note:logNote||"Extra",type:"extra",extraAmount:h};
-    onUpdate({...chapter,completedHours:roundToMinute(chapter.completedHours+h),extraHours:roundToMinute((chapter.extraHours||0)+h),hourLogs:[...logs,newLog]});
+    // FIX: tag this entry with its true "beyond allotted" portion (same math as the
+    // regular log path) instead of always counting 100% of it as extra — that mismatch
+    // was the root cause of Extra/Remaining contradicting each other in reports.
+    const newCompleted = roundToMinute(chapter.completedHours + h);
+    const extraPortion = chapter.totalHours > 0
+      ? roundToMinute(Math.max(0, Math.min(h, newCompleted - chapter.totalHours)))
+      : h;
+    const newLog={id:uid(),hours:h,date:logDate,note:logNote||"Extra",type:"extra",extraAmount:extraPortion};
+    onUpdate({...chapter,completedHours:newCompleted,hourLogs:[...logs,newLog]});
     setExtraH("");setLogNote("");
   },[extraH,extraUnit,logDate,logNote,chapter,logs,onUpdate]);
 
   const deleteLog=useCallback(logId=>{
     const log=logs.find(l=>l.id===logId);
     if(!log||!window.confirm(`Remove ${fmtHours(log.hours)} on ${fmtDate(log.date)}?`)) return;
-    onUpdate({...chapter,completedHours:roundToMinute(Math.max(0,chapter.completedHours-log.hours)),extraHours:roundToMinute(Math.max(0,(chapter.extraHours||0)-(log.extraAmount!=null?log.extraAmount:(log.type==="extra"?log.hours:0)))),hourLogs:logs.filter(l=>l.id!==logId)});
+    onUpdate({...chapter,completedHours:roundToMinute(Math.max(0,chapter.completedHours-log.hours)),hourLogs:logs.filter(l=>l.id!==logId)});
   },[logs,chapter,onUpdate]);
 
   const saveEditLog=useCallback(()=>{
@@ -1475,9 +1661,7 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
     if(!old) return;
     const newH=roundToMinute(parseHours(editLog.hours));
     const diff=newH-old.hours;
-    const oldExtra=old.extraAmount!=null?old.extraAmount:(old.type==="extra"?old.hours:0);
-    const newExtra=old.hours>0?roundToMinute(oldExtra*(newH/old.hours)):0;
-    onUpdate({...chapter,completedHours:roundToMinute(Math.max(0,chapter.completedHours+diff)),extraHours:roundToMinute(Math.max(0,(chapter.extraHours||0)+(newExtra-oldExtra))),hourLogs:logs.map(l=>l.id===editLog.id?{...l,hours:newH,date:editLog.date,note:editLog.note,extraAmount:newExtra,type:newExtra>0?"extra":"regular"}:l)});
+    onUpdate({...chapter,completedHours:roundToMinute(Math.max(0,chapter.completedHours+diff)),hourLogs:logs.map(l=>l.id===editLog.id?{...l,hours:newH,date:editLog.date,note:editLog.note}:l)});
     setEditLog(null);
   },[editLog,logs,chapter,onUpdate]);
 
@@ -1498,17 +1682,36 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
     ntRef.current=setTimeout(()=>onUpdate({...chapter,notes:v}),800);
   },[chapter,onUpdate]);
 
+  const shareChapter=async()=>{
+    setSharing(true);
+    try{ await shareChapterImage(chapter,color); }
+    finally{ setSharing(false); }
+  };
+  const downloadChapterCSV=()=>{
+    const csv=buildChapterCSV(chapter);
+    const a=document.createElement("a");
+    const safeName=chapter.name.replace(/[^a-z0-9]+/gi,"_");
+    a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+    a.download=`${safeName}_HoursReport_${todayStr()}.csv`;
+    a.click();
+  };
+
   return(
     <div style={{minHeight:"100vh",background:"#f8fafc"}}>
       <div style={{background:`linear-gradient(160deg,${shadeColor(color,0.72)},${shadeColor(color,0.82)})`,padding:"24px 20px 28px",color:"#fff",position:"relative",overflow:"hidden",borderRadius:"0 0 24px 24px"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:8,flexWrap:"wrap"}}>
           <button onClick={onBack} style={{background:"rgba(255,255,255,.14)",border:"none",borderRadius:12,padding:"8px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,display:"flex",alignItems:"center",gap:6}}><ArrowLeft size={15}/> Back</button>
-          <SyncBadge status={syncStatus}/>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {/* NEW: per-chapter Share/CSV, same as the batch page */}
+            <button onClick={shareChapter} disabled={sharing} style={{background:"rgba(255,255,255,.14)",border:"none",borderRadius:12,padding:"8px 12px",color:"#fff",fontWeight:700,cursor:sharing?"default":"pointer",fontFamily:"inherit",fontSize:12,opacity:sharing?.7:1,display:"flex",alignItems:"center",gap:5}}><Share2 size={13}/> {sharing?"…":"Share"}</button>
+            <button onClick={downloadChapterCSV} style={{background:"rgba(255,255,255,.14)",border:"none",borderRadius:12,padding:"8px 12px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12,display:"flex",alignItems:"center",gap:5}}><Download size={13}/> CSV</button>
+            <SyncBadge status={syncStatus}/>
+          </div>
         </div>
         <div style={{fontSize:38,fontWeight:900,letterSpacing:"-1px"}}>{chapter.batchCode}</div>
         <div style={{fontSize:20,fontWeight:700,marginTop:4,marginBottom:18,lineHeight:1.3}}>{chapter.name}</div>
         <div style={{display:"flex",gap:10,marginBottom:14}}>
-          {[{l:"Allotted",v:fmtHours(chapter.totalHours),Icon:Clock},{l:"Taken",v:fmtHours(chapter.completedHours),Icon:CheckCircle2},{l:"Extra",v:fmtHours(chapter.extraHours||0),Icon:Star},{l:"Left",v:fmtHours(remaining),Icon:Hourglass}].map(s=>(
+          {[{l:"Allotted",v:fmtHours(chapter.totalHours),Icon:Clock},{l:"Taken",v:fmtHours(chapter.completedHours),Icon:CheckCircle2},{l:"Extra",v:fmtHours(deriveExtraHours(chapter.completedHours,chapter.totalHours)),Icon:Star},{l:"Left",v:fmtHours(remaining),Icon:Hourglass}].map(s=>(
             <div key={s.l} style={{flex:1,background:"rgba(255,255,255,.14)",borderRadius:12,padding:"10px 4px",textAlign:"center"}}>
               <div style={{display:"flex",justifyContent:"center",marginBottom:4}}><s.Icon size={13} color="rgba(255,255,255,.8)"/></div>
               <div style={{fontSize:14,fontWeight:800}}>{s.v}</div>
@@ -1531,7 +1734,9 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
               {/* NEW: compact toggle — choose whether the number below means hours or minutes */}
               <UnitToggle unit={logUnit} onChange={setLogUnit} activeColor={color}/>
             </div>
-            {/* Hours/Minutes input + Log button */}
+            {/* NEW: one-tap presets — pick a common duration instead of typing */}
+            <PresetChips unit={logUnit} color={color} onPick={v=>setLogH(String(v))}/>
+            {/* Hours/Minutes input + Log button — still open for any custom value */}
             <div style={{display:"flex",gap:8,marginBottom:10}}>
               <div style={{flex:1}}>
                 <input type="number" min={0} step={logUnit==="minutes"?1:0.0833} value={logH}
@@ -1555,19 +1760,21 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
               </div>
             )}
 
-            {/* FIX #3: Date and Period/Note on separate rows — no overlap */}
-            <div style={{marginBottom:6}}>
-              <label style={{display:"block",fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4,display:"flex",alignItems:"center",gap:5}}><Calendar size={12}/> Date</label>
-              <input type="date" value={logDate}
-                onChange={e=>setLogDate(e.target.value)}
-                style={{width:"100%",padding:"10px 12px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
-            </div>
-            <div>
-              <label style={{display:"block",fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4,display:"flex",alignItems:"center",gap:5}}><FileText size={12}/> Period / Note</label>
-              <input type="text" value={logNote}
-                onChange={e=>setLogNote(e.target.value)}
-                placeholder="e.g. Period 3"
-                style={{width:"100%",padding:"10px 12px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
+            {/* NEW: Date and Period/Note side by side, equal width — less vertical clutter */}
+            <div style={{display:"flex",gap:8}}>
+              <div style={{flex:1}}>
+                <label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4}}><Calendar size={12}/> Date</label>
+                <input type="date" value={logDate}
+                  onChange={e=>setLogDate(e.target.value)}
+                  style={{width:"100%",padding:"10px 8px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:13,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
+              </div>
+              <div style={{flex:1}}>
+                <label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:700,color:"#64748b",marginBottom:4}}><FileText size={12}/> Period</label>
+                <input type="text" value={logNote}
+                  onChange={e=>setLogNote(e.target.value)}
+                  placeholder="e.g. Period 3"
+                  style={{width:"100%",padding:"10px 8px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:13,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
+              </div>
             </div>
           </div>
 
@@ -1578,6 +1785,8 @@ function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
               {/* NEW: compact toggle — choose whether the number below means hours or minutes */}
               <UnitToggle unit={extraUnit} onChange={setExtraUnit} activeColor="#92400e" trackBg="#fde68a55" activeBg="#fffef5"/>
             </div>
+            {/* NEW: one-tap presets for common extra durations */}
+            <PresetChips unit={extraUnit} color="#92400e" onPick={v=>setExtraH(String(v))}/>
             <div style={{display:"flex",gap:8}}>
               <div style={{flex:1}}>
                 <input type="number" min={0} step={extraUnit==="minutes"?1:0.0833} value={extraH}
@@ -1920,19 +2129,23 @@ export default function App() {
   };
 
   // FIX #1 & #5: addBatch copies topics from master chapters
-  const addBatch=async({batchCode,rows})=>{
+  const addBatch=async({batchCode,teacherName,rows})=>{
     const newChapters=[];
     for(const row of rows){
       const master=masterChapters.find(mc=>mc.name.toLowerCase()===row.name.trim().toLowerCase());
       // Copy topics from master, resetting done state
       const topics=master?master.topics.map(t=>({...t,id:uid(),done:false})):[];
-      const nc={id:uid(),name:row.name.trim(),batchCode,totalHours:parseFloat(row.hours),completedHours:0,extraHours:0,topics,notes:"",lastCompletedTopic:null,hourLogs:[]};
+      const nc={id:uid(),name:row.name.trim(),batchCode,totalHours:parseFloat(row.hours),completedHours:0,extraHours:0,topics,notes:"",lastCompletedTopic:null,hourLogs:[],batchTeacher:teacherName||null};
       newChapters.push(nc);
     }
     setChapters(prev=>[...prev,...newChapters]);
     setSyncStatus("saving");
-    for(const nc of newChapters) await supabase.from("chapters").insert(toRow(profile.code,nc));
-    setSyncStatus("saved");
+    let hadError=false;
+    for(const nc of newChapters){
+      const {error}=await supabase.from("chapters").insert(toRow(profile.code,nc));
+      if(error) hadError=true;
+    }
+    setSyncStatus(hadError?"error":"saved");
     setTimeout(()=>setSyncStatus(null),2500);
     setAddBatchOpen(false);
   };
