@@ -6,7 +6,8 @@ import {
   Pencil, Trash2, Star, BarChart3, ChevronDown, ChevronUp, ChevronRight,
   Plus, Search, LogOut, Camera, AlertTriangle, Cloud, CloudUpload, CloudOff,
   X, ClipboardList, FileText, MapPin, GraduationCap, LogIn, UserPlus,
-  Inbox, Zap, FlaskConical, Dna, Calculator, PartyPopper, Trophy, Lightbulb
+  Inbox, Zap, FlaskConical, Dna, Calculator, PartyPopper, Trophy, Lightbulb,
+  Plane, Navigation, ArrowRight, MessageCircle
 } from "lucide-react";
 
 const supabase = createClient(
@@ -326,6 +327,93 @@ async function shareBatchImage(batchCode, color, chapters) {
         } else {
           const a=document.createElement("a");
           a.href=URL.createObjectURL(blob); a.download=`${batchCode}_hours.png`; a.click();
+        }
+      }catch(e){ /* share cancelled by user — ignore */ }
+      resolve();
+    },"image/png");
+  });
+}
+
+// ── Travel Details (for travel allowance records) ──────────────────
+const TRAVEL_PURPOSES=["Foundation Class","Repeaters","Regular Class","Special Class","Exam Duty","Other"];
+
+function trFromRow(r){
+  return { id:r.id, date:r.date, from:r.from_place||"", to:r.to_place||"", purpose:r.purpose||"", notes:r.notes||"" };
+}
+function trToRow(teacherCode,t){
+  return { id:t.id, teacher_code:teacherCode, date:t.date, from_place:t.from, to_place:t.to, purpose:t.purpose, notes:t.notes||"" };
+}
+
+function buildTravelCSV(entries){
+  const rows=[["Date","From","To","Purpose","Notes"]];
+  [...entries].sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(t=>{
+    rows.push([fmtDate(t.date),t.from,t.to,t.purpose,t.notes||""]);
+  });
+  return rows.map(r=>r.map(v=>`"${v}"`).join(",")).join("\n");
+}
+
+async function shareTravelImage(entries, monthLbl, teacherName){
+  const sorted=[...entries].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const W=720, headerH=170, rowH=42;
+  const H=headerH+66+Math.max(1,sorted.length)*rowH+36;
+  const canvas=document.createElement("canvas");
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext("2d");
+
+  ctx.fillStyle="#f8fafc"; ctx.fillRect(0,0,W,H);
+  const grad=ctx.createLinearGradient(0,0,W,headerH);
+  grad.addColorStop(0,"#6366f1"); grad.addColorStop(1,"#4338ca");
+  ctx.fillStyle=grad; ctx.fillRect(0,0,W,headerH);
+
+  ctx.fillStyle="#ffffff";
+  ctx.font="900 28px Sora, sans-serif";
+  ctx.fillText("Travel Details",32,48);
+  ctx.font="700 14px Sora, sans-serif";
+  ctx.globalAlpha=.85;
+  ctx.fillText(`${teacherName||""} · ${monthLbl}`,32,72);
+  ctx.font="600 12px Sora, sans-serif";
+  ctx.globalAlpha=.7;
+  ctx.fillText(`${sorted.length} trip${sorted.length===1?"":"s"} · Generated ${fmtDate(todayStr())}`,32,94);
+  ctx.globalAlpha=1;
+
+  let y=headerH+34;
+  ctx.fillStyle="#0f172a";
+  ctx.font="800 16px Sora, sans-serif";
+  ctx.fillText("Trip Log",32,y);
+  y+=26;
+  ctx.font="700 11px Sora, sans-serif";
+  ctx.fillStyle="#94a3b8";
+  const colWidths=[0.18,0.30,0.30,0.22].map(f=>(W-64)*f);
+  const colX=[32];
+  for(let i=0;i<colWidths.length-1;i++) colX.push(colX[i]+colWidths[i]);
+  ["Date","From","To","Purpose"].forEach((h,i)=>ctx.fillText(h,colX[i],y));
+  y+=12;
+  ctx.strokeStyle="#e2e8f0"; ctx.beginPath(); ctx.moveTo(32,y); ctx.lineTo(W-32,y); ctx.stroke();
+  y+=26;
+
+  const truncate=(s,max)=>!s?"":(s.length>max?s.slice(0,max-1)+"…":s);
+  if(sorted.length===0){
+    ctx.fillStyle="#94a3b8"; ctx.font="600 13px Sora, sans-serif";
+    ctx.fillText("No trips logged",32,y);
+  }
+  sorted.forEach(t=>{
+    ctx.fillStyle="#1e293b"; ctx.font="600 13px Sora, sans-serif";
+    [fmtDate(t.date),truncate(t.from,20),truncate(t.to,20),truncate(t.purpose,16)].forEach((c,i)=>ctx.fillText(c,colX[i],y));
+    y+=rowH-16;
+    ctx.strokeStyle="#f1f5f9"; ctx.beginPath(); ctx.moveTo(32,y-8); ctx.lineTo(W-32,y-8); ctx.stroke();
+    y+=16;
+  });
+
+  return new Promise(resolve=>{
+    canvas.toBlob(async blob=>{
+      if(!blob){ resolve(); return; }
+      const file=new File([blob],`Travel_${monthLbl.replace(/\s+/g,"_")}.png`,{type:"image/png"});
+      try{
+        if(navigator.canShare && navigator.canShare({files:[file]})){
+          await navigator.share({files:[file],title:"Travel Details",text:`Travel details for ${monthLbl}`});
+        } else {
+          const a=document.createElement("a");
+          a.href=URL.createObjectURL(blob); a.download=`Travel_${monthLbl.replace(/\s+/g,"_")}.png`; a.click();
         }
       }catch(e){ /* share cancelled by user — ignore */ }
       resolve();
@@ -922,7 +1010,7 @@ function BatchFormModal({onSave,onClose,subject,masterChapters}) {
       </div>
       <div style={{marginBottom:14}}>
         <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Teacher Name (optional)</label>
-        <input value={teacherName} onChange={e=>setTeacherName(e.target.value)} placeholder="e.g. Alice"
+        <input value={teacherName} onChange={e=>setTeacherName(e.target.value)} placeholder="e.g. Sreekutty"
           style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
       </div>
       <div style={{fontSize:13,fontWeight:700,color:"#475569",marginBottom:8}}>Chapters in this batch:</div>
@@ -1245,7 +1333,7 @@ function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatch,completedBatc
 }
 
 // ── Profile Tab ───────────────────────────────────────────────────
-function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
+function ProfileTab({profile,chapters,onLogout,onUpdateProfile,onOpenTravel}) {
   const fileRef=useRef();
   const batchChapters=chapters.filter(c=>c.batchCode);
   const totalDone=batchChapters.reduce((s,c)=>s+c.completedHours,0);
@@ -1308,6 +1396,10 @@ function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
             <Download size={22}/>
             <div style={{textAlign:"left"}}><div>Download CSV Report</div><div style={{fontSize:11,opacity:.75,fontWeight:500}}>Full chapter report for all batches</div></div>
           </button>
+          <button onClick={onOpenTravel} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px",background:"#fff",color:"#0f172a",border:"2px solid #e2e8f0",borderRadius:14,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14}}>
+            <Plane size={22} color="#6366f1"/>
+            <div style={{textAlign:"left"}}><div>Travel Details</div><div style={{fontSize:11,color:"#94a3b8",fontWeight:500}}>Log trips for travel allowance</div></div>
+          </button>
           <button onClick={onLogout} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px",background:"#fff",color:"#ef4444",border:"2px solid #fee2e2",borderRadius:14,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14}}>
             <LogOut size={22}/>
             <div style={{textAlign:"left"}}><div>Logout</div><div style={{fontSize:11,color:"#94a3b8",fontWeight:500}}>Sign out of your account</div></div>
@@ -1315,6 +1407,162 @@ function ProfileTab({profile,chapters,onLogout,onUpdateProfile}) {
         </div>
       </div>
       <div style={{textAlign:"center",fontSize:12,color:"#cbd5e1",paddingBottom:10}}>LectureTrack v13 · Made for teachers</div>
+    </div>
+  );
+}
+
+// ── Travel Entry Modal (add/edit a single trip) ─────────────────────
+function TravelEntryModal({entry,onSave,onClose}) {
+  const [date,setDate]=useState(entry?.date||todayStr());
+  const [from,setFrom]=useState(entry?.from||"");
+  const [to,setTo]=useState(entry?.to||"");
+  const [purpose,setPurpose]=useState(entry?.purpose && TRAVEL_PURPOSES.includes(entry.purpose) ? entry.purpose : (entry?.purpose ? "Other" : "Foundation Class"));
+  const [customPurpose,setCustomPurpose]=useState(entry?.purpose && !TRAVEL_PURPOSES.slice(0,-1).includes(entry.purpose) ? entry.purpose : "");
+  const [notes,setNotes]=useState(entry?.notes||"");
+
+  const handleSave=()=>{
+    if(!from.trim()||!to.trim()) return;
+    const finalPurpose = purpose==="Other" ? (customPurpose.trim()||"Other") : purpose;
+    onSave({id:entry?.id||uid(), date, from:from.trim(), to:to.trim(), purpose:finalPurpose, notes:notes.trim()});
+  };
+
+  return(
+    <Modal title={<span style={{display:"flex",alignItems:"center",gap:8}}><Plane size={17}/> {entry?"Edit Trip":"Add Trip"}</span>} onClose={onClose}>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"flex",alignItems:"center",gap:5,fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}><Calendar size={13}/> Date</label>
+        <input type="date" value={date} onChange={e=>setDate(e.target.value)}
+          style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        <div style={{flex:1}}>
+          <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>From</label>
+          <input value={from} onChange={e=>setFrom(e.target.value)} placeholder="e.g. Pala"
+            style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
+        </div>
+        <div style={{flex:1}}>
+          <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>To</label>
+          <input value={to} onChange={e=>setTo(e.target.value)} placeholder="e.g. Kottayam"
+            style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
+        </div>
+      </div>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:8}}>Purpose</label>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+          {TRAVEL_PURPOSES.map(p=>(
+            <button key={p} onClick={()=>setPurpose(p)} style={{padding:"8px 14px",borderRadius:12,border:`2px solid ${purpose===p?"#6366f1":"#e2e8f0"}`,background:purpose===p?"#eef2ff":"#f8fafc",fontWeight:700,cursor:"pointer",color:purpose===p?"#6366f1":"#64748b",fontFamily:"inherit",fontSize:12}}>
+              {p}
+            </button>
+          ))}
+        </div>
+        {purpose==="Other"&&(
+          <input value={customPurpose} onChange={e=>setCustomPurpose(e.target.value)} placeholder="Specify purpose"
+            style={{width:"100%",marginTop:8,padding:"11px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:14,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
+        )}
+      </div>
+      <div style={{marginBottom:18}}>
+        <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Notes (optional)</label>
+        <input value={notes} onChange={e=>setNotes(e.target.value)} placeholder="e.g. by bus"
+          style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
+      </div>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
+        <button onClick={handleSave} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}}><CheckCircle2 size={15}/> Save Trip</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Travel Page ───────────────────────────────────────────────────
+function TravelPage({travelLogs,profile,onBack,onAdd,onEdit,onDelete}) {
+  const [addOpen,setAddOpen]=useState(false);
+  const [editEntry,setEditEntry]=useState(null);
+  const [sharing,setSharing]=useState(false);
+
+  const availableMonths=useMemo(()=>{
+    const set=new Set(travelLogs.map(t=>monthKey(t.date)));
+    set.add(monthKey(todayStr()));
+    return [...set].sort().reverse();
+  },[travelLogs]);
+  const [selMonth,setSelMonth]=useState(monthKey(todayStr()));
+  const monthEntries=useMemo(()=>travelLogs.filter(t=>monthKey(t.date)===selMonth).sort((a,b)=>new Date(b.date)-new Date(a.date)),[travelLogs,selMonth]);
+
+  const downloadCSV=()=>{
+    const csv=buildTravelCSV(monthEntries);
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+    a.download=`Travel_${profile.code}_${monthLabel(selMonth).replace(/\s+/g,"_")}.csv`;
+    a.click();
+  };
+
+  const shareWhatsApp=async()=>{
+    setSharing(true);
+    try{ await shareTravelImage(monthEntries, monthLabel(selMonth), profile.name); }
+    finally{ setSharing(false); }
+  };
+
+  return(
+    <div style={{minHeight:"100vh",background:"#f8fafc"}}>
+      <div style={{background:"linear-gradient(160deg,#3730a3,#1e1b4b)",padding:"24px 20px 28px",color:"#fff",borderRadius:"0 0 24px 24px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <button onClick={onBack} style={{background:"rgba(255,255,255,.14)",border:"none",borderRadius:12,padding:"8px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,display:"flex",alignItems:"center",gap:6}}><ArrowLeft size={15}/> Back</button>
+          <div style={{fontSize:19,fontWeight:900,display:"flex",alignItems:"center",gap:8}}><Plane size={19}/> Travel Details</div>
+          <div style={{width:70}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+          <select value={selMonth} onChange={e=>setSelMonth(e.target.value)}
+            style={{background:"rgba(255,255,255,.16)",color:"#fff",border:"none",borderRadius:99,padding:"9px 16px",fontWeight:700,fontSize:13,fontFamily:"inherit",outline:"none"}}>
+            {availableMonths.map(m=><option key={m} value={m} style={{color:"#0f172a"}}>{monthLabel(m)}</option>)}
+          </select>
+          <div style={{fontSize:13,fontWeight:700,opacity:.85}}>{monthEntries.length} trip{monthEntries.length===1?"":"s"}</div>
+        </div>
+      </div>
+
+      <div style={{padding:"20px 16px 90px"}}>
+        <div style={{display:"flex",gap:10,marginBottom:16}}>
+          <button onClick={shareWhatsApp} disabled={sharing} style={{flex:1,padding:"13px",background:"#fff",color:"#16a34a",border:"2px solid #bbf7d0",borderRadius:14,fontWeight:800,cursor:sharing?"default":"pointer",fontFamily:"inherit",fontSize:13,opacity:sharing?.7:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+            <MessageCircle size={16}/> {sharing?"…":"Share to WhatsApp"}
+          </button>
+          <button onClick={downloadCSV} style={{flex:1,padding:"13px",background:"#fff",color:"#6366f1",border:"2px solid #e0e7ff",borderRadius:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+            <Download size={16}/> CSV
+          </button>
+        </div>
+
+        <button onClick={()=>setAddOpen(true)} style={{width:"100%",padding:"13px",background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:14,boxShadow:"0 4px 14px rgba(99,102,241,.3)",display:"flex",alignItems:"center",justifyContent:"center",gap:7,marginBottom:18}}>
+          <Plus size={16}/> Add Trip
+        </button>
+
+        {monthEntries.length===0&&(
+          <div style={{textAlign:"center",padding:"50px 20px",color:"#94a3b8"}}>
+            <div style={{display:"flex",justifyContent:"center",marginBottom:14}}><Navigation size={40} strokeWidth={1.5}/></div>
+            <div style={{fontWeight:800,fontSize:16,color:"#475569",marginBottom:6}}>No trips logged in {monthLabel(selMonth)}</div>
+            <div style={{fontSize:13}}>Tap "Add Trip" to log your first one</div>
+          </div>
+        )}
+
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {monthEntries.map(t=>(
+            <div key={t.id} style={{background:"#fff",borderRadius:16,padding:"14px 16px",boxShadow:"0 1px 8px rgba(0,0,0,.06)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:8}}>
+                <div style={{fontSize:12,color:"#94a3b8",fontWeight:600,display:"flex",alignItems:"center",gap:5}}><Calendar size={12}/> {fmtDate(t.date)}</div>
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>setEditEntry(t)} style={{background:"#eef2ff",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Pencil size={13} color="#6366f1"/></button>
+                  <button onClick={()=>onDelete(t.id)} style={{background:"#fee2e2",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Trash2 size={13} color="#ef4444"/></button>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8,fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:8}}>
+                <span>{t.from}</span><ArrowRight size={15} color="#94a3b8"/><span>{t.to}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                <span style={{fontSize:11,fontWeight:700,padding:"4px 12px",borderRadius:99,background:"#eef2ff",color:"#4338ca"}}>{t.purpose}</span>
+                {t.notes&&<span style={{fontSize:12,color:"#94a3b8"}}>{t.notes}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {addOpen&&<TravelEntryModal onSave={e=>{onAdd(e);setAddOpen(false);}} onClose={()=>setAddOpen(false)}/>}
+      {editEntry&&<TravelEntryModal entry={editEntry} onSave={e=>{onEdit(e);setEditEntry(null);}} onClose={()=>setEditEntry(null)}/>}
     </div>
   );
 }
@@ -1925,10 +2173,12 @@ export default function App() {
   const [editChapter,setEditChapter]=useState(null);
   const [detailId,setDetailId]=useState(null);
   const [batchView,setBatchView]=useState(null);
+  const [travelView,setTravelView]=useState(false); // NEW: Travel Details page
   const congratsShown=useRef(false);
   const [showCongrats,setShowCongrats]=useState(false);
   // NEW: tracks which batch codes have been marked "Completed" so they can be hidden from the Home tab
   const [completedBatches,setCompletedBatches]=useState([]);
+  const [travelLogs,setTravelLogs]=useState([]); // NEW: Travel Details entries
 
   // NEW/FIX: phone back-button support. Without this, opening a batch or a chapter's
   // detail page doesn't add anything to browser history, so the hardware/gesture back
@@ -1937,8 +2187,10 @@ export default function App() {
   // browser's back navigation (popstate) to close that view instead of exiting.
   const detailIdRef=useRef(detailId);
   const batchViewRef=useRef(batchView);
+  const travelViewRef=useRef(travelView);
   useEffect(()=>{ detailIdRef.current=detailId; },[detailId]);
   useEffect(()=>{ batchViewRef.current=batchView; },[batchView]);
+  useEffect(()=>{ travelViewRef.current=travelView; },[travelView]);
 
   useEffect(()=>{
     const handlePopState=()=>{
@@ -1946,6 +2198,8 @@ export default function App() {
         setDetailId(null);
       } else if(batchViewRef.current){
         setBatchView(null);
+      } else if(travelViewRef.current){
+        setTravelView(false);
       }
       // else: already at the top level — let the back button behave normally
     };
@@ -1962,10 +2216,15 @@ export default function App() {
     window.history.pushState({ltView:"detail"},"");
     setDetailId(id);
   },[]);
+  const openTravelView=useCallback(()=>{
+    window.history.pushState({ltView:"travel"},"");
+    setTravelView(true);
+  },[]);
   // "Back" actions go through history.back() so the popstate handler above is the
   // single source of truth for closing a view — keeps the history stack accurate.
   const goBackFromDetail=useCallback(()=>{ window.history.back(); },[]);
   const goBackFromBatch=useCallback(()=>{ window.history.back(); },[]);
+  const goBackFromTravel=useCallback(()=>{ window.history.back(); },[]);
 
   useEffect(()=>{const t=setTimeout(()=>setSplashDone(true),2200);return()=>clearTimeout(t);},[]);
 
@@ -2010,6 +2269,12 @@ export default function App() {
           }
         }
         setLoading(false);
+      });
+    // NEW: load this teacher's travel log entries
+    supabase.from("travel_logs").select("*").eq("teacher_code",profile.code).order("date",{ascending:false})
+      .then(({data,error})=>{
+        if(!error&&data) setTravelLogs(data.map(trFromRow));
+        // if the table doesn't exist yet, silently ignore — Travel Details will just start empty
       });
   },[profile?.code]);
 
@@ -2183,6 +2448,25 @@ export default function App() {
     setEditChapter(null);
   };
 
+  // NEW: Travel Details CRUD
+  const addTravelEntry=async(entry)=>{
+    setTravelLogs(prev=>[entry,...prev]);
+    const {error}=await supabase.from("travel_logs").insert(trToRow(profile.code,entry));
+    if(error){
+      setSyncStatus("error");
+      setTimeout(()=>setSyncStatus(null),2500);
+    }
+  };
+  const editTravelEntry=async(entry)=>{
+    setTravelLogs(prev=>prev.map(t=>t.id===entry.id?entry:t));
+    await supabase.from("travel_logs").upsert(trToRow(profile.code,entry),{onConflict:"id"});
+  };
+  const deleteTravelEntry=async(id)=>{
+    if(!window.confirm("Remove this trip?")) return;
+    setTravelLogs(prev=>prev.filter(t=>t.id!==id));
+    await supabase.from("travel_logs").delete().eq("id",id);
+  };
+
   const logout=()=>{localStorage.removeItem("lt_session");window.location.reload();};
 
   const batches=useMemo(()=>[...new Set(batchChapters.map(c=>c.batchCode))].sort(),[batchChapters]);
@@ -2230,6 +2514,15 @@ export default function App() {
     );
   }
 
+  if(travelView){
+    return(
+      <><style>{STYLE}</style>
+      <TravelPage travelLogs={travelLogs} profile={profile} onBack={goBackFromTravel}
+        onAdd={addTravelEntry} onEdit={editTravelEntry} onDelete={deleteTravelEntry}/>
+      </>
+    );
+  }
+
   return(
     <><style>{STYLE}</style>
     <div style={{maxWidth:560,margin:"0 auto",paddingBottom:72,minHeight:"100vh"}}>
@@ -2244,7 +2537,7 @@ export default function App() {
           {tab==="home"&&<HomeTab chapters={batchChapters} profile={profile} onOpenChapter={openDetail} onOpenBatch={openBatchView} syncStatus={syncStatus} onGoProfile={()=>setTab("profile")} completedBatches={completedBatches} onAddBatch={()=>setAddBatchOpen(true)}/>}
           {tab==="batches"&&<BatchesTab chapters={batchChapters} onOpenBatch={openBatchView} onDeleteBatch={deleteBatch} onAddBatch={()=>setAddBatchOpen(true)} completedBatches={completedBatches}/>}
           {tab==="chapters"&&<ChaptersTab masterChapters={masterChapters} onOpenMaster={c=>setEditMaster(c)} onAddMaster={()=>setAddMasterOpen(true)} onDeleteMaster={deleteMasterChapter}/>}
-          {tab==="profile"&&<ProfileTab profile={profile} chapters={batchChapters} onLogout={logout} onUpdateProfile={p=>setProfile(p)}/>}
+          {tab==="profile"&&<ProfileTab profile={profile} chapters={batchChapters} onLogout={logout} onUpdateProfile={p=>setProfile(p)} onOpenTravel={openTravelView}/>}
         </>
       )}
     </div>
