@@ -1013,7 +1013,7 @@ function BatchFormModal({onSave,onClose,subject,masterChapters}) {
       </div>
       <div style={{marginBottom:14}}>
         <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Teacher Name (optional)</label>
-        <input value={teacherName} onChange={e=>setTeacherName(e.target.value)} placeholder="e.g. Sreekutty"
+        <input value={teacherName} onChange={e=>setTeacherName(e.target.value)} placeholder="e.g. Alice"
           style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
       </div>
       <div style={{fontSize:13,fontWeight:700,color:"#475569",marginBottom:8}}>Chapters in this batch:</div>
