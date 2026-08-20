@@ -7,7 +7,7 @@ import {
   Plus, Search, LogOut, Camera, AlertTriangle, Cloud, CloudUpload, CloudOff,
   X, ClipboardList, FileText, MapPin, GraduationCap, LogIn, UserPlus,
   Inbox, Zap, FlaskConical, Dna, Calculator, PartyPopper, Trophy, Lightbulb,
-  Plane, Navigation, ArrowRight, MessageCircle
+  Plane, Navigation, ArrowRight, MessageCircle, Repeat, Building2, MoreHorizontal
 } from "lucide-react";
 
 const supabase = createClient(
@@ -130,6 +130,17 @@ function SubjectIcon({subject,size=14,color="currentColor"}) {
   const Icon=SUBJECT_ICONS[subject]||BookOpen;
   return <Icon size={size} color={color} strokeWidth={2.2}/>;
 }
+
+// NEW: batch categories — chosen when creating a batch, used to group "Your Batches" on Home
+const BATCH_CATEGORIES=["Repeaters","Residential","Long Term","Foundation","Tuition","Others"];
+const CATEGORY_ICONS={
+  "Repeaters":Repeat,
+  "Residential":Building2,
+  "Long Term":Hourglass,
+  "Foundation":GraduationCap,
+  "Tuition":BookOpen,
+  "Others":MoreHorizontal,
+};
 
 function todayStr() { return new Date().toISOString().split("T")[0]; }
 function fmtDate(d) {
@@ -548,7 +559,7 @@ function toRow(teacherCode,c) {
     total_hours:c.totalHours||0, completed_hours:c.completedHours||0,
     extra_hours:c.extraHours||0, topics:c.topics||[],
     notes:c.notes||"", last_completed_topic:c.lastCompletedTopic||null,
-    hour_logs:c.hourLogs||[], batch_teacher:c.batchTeacher||null, updated_at:new Date().toISOString()
+    hour_logs:c.hourLogs||[], batch_teacher:c.batchTeacher||null, batch_category:c.batchCategory||null, updated_at:new Date().toISOString()
   };
 }
 
@@ -559,7 +570,7 @@ function fromRow(r) {
     totalHours:r.total_hours||0, completedHours:r.completed_hours||0,
     extraHours:r.extra_hours||0, topics:r.topics||[],
     notes:r.notes||"", lastCompletedTopic:r.last_completed_topic,
-    hourLogs:r.hour_logs||[], batchTeacher:r.batch_teacher||null
+    hourLogs:r.hour_logs||[], batchTeacher:r.batch_teacher||null, batchCategory:r.batch_category||null
   };
 }
 
@@ -960,9 +971,11 @@ function BatchRowInput({rowId, initialName, initialHours, onNameChange, onHoursC
 }
 
 // ── Batch Form Modal ──────────────────────────────────────────────
+// UPDATED: added Batch Category selector (Repeaters / Residential / Long Term / Foundation / Tuition / Others)
 function BatchFormModal({onSave,onClose,subject,masterChapters}) {
   const [batchCode,setBatchCode]=useState("");
   const [teacherName,setTeacherName]=useState("");
+  const [batchCategory,setBatchCategory]=useState(BATCH_CATEGORIES[0]);
   const [rows,setRows]=useState([{id:uid(),name:"",hours:""}]);
   // FIX #6: use refs to track current row data without re-rendering the inputs
   const rowDataRef = useRef({});
@@ -1001,7 +1014,7 @@ function BatchFormModal({onSave,onClose,subject,masterChapters}) {
       .map(r => rowDataRef.current[r.id] || {name:"",hours:""})
       .filter(r => r.name.trim() && parseFloat(r.hours)>0);
     if(validRows.length===0) return;
-    onSave({batchCode:batchCode.trim().toUpperCase(), teacherName:teacherName.trim(), rows:validRows});
+    onSave({batchCode:batchCode.trim().toUpperCase(), teacherName:teacherName.trim(), batchCategory, rows:validRows});
   };
 
   return(
@@ -1013,8 +1026,21 @@ function BatchFormModal({onSave,onClose,subject,masterChapters}) {
       </div>
       <div style={{marginBottom:14}}>
         <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Teacher Name (optional)</label>
-        <input value={teacherName} onChange={e=>setTeacherName(e.target.value)} placeholder="e.g. Sreekutty"
+        <input value={teacherName} onChange={e=>setTeacherName(e.target.value)} placeholder="e.g. Alice"
           style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
+      </div>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:8}}>Batch Category</label>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+          {BATCH_CATEGORIES.map(cat=>{
+            const Icon=CATEGORY_ICONS[cat];
+            return(
+              <button key={cat} onClick={()=>setBatchCategory(cat)} style={{padding:"8px 14px",borderRadius:12,border:`2px solid ${batchCategory===cat?"#6366f1":"#e2e8f0"}`,background:batchCategory===cat?"#eef2ff":"#f8fafc",fontWeight:700,cursor:"pointer",color:batchCategory===cat?"#6366f1":"#64748b",fontFamily:"inherit",fontSize:12,display:"flex",alignItems:"center",gap:6}}>
+                <Icon size={13}/>{cat}
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div style={{fontSize:13,fontWeight:700,color:"#475569",marginBottom:8}}>Chapters in this batch:</div>
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
@@ -1111,6 +1137,7 @@ function AddChapterMasterModal({onSave,onClose,subject}) {
 
 // ── Home Tab ──────────────────────────────────────────────────────
 // UPDATED: accepts completedBatches so the batch list on the front page only shows running batches
+// UPDATED: batches are now grouped by category into collapsible sections
 function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProfile,completedBatches=[],onAddBatch}) {
   const batchChapters=chapters.filter(c=>c.batchCode);
   const totalAllotted=batchChapters.reduce((s,c)=>s+c.totalHours,0);
@@ -1122,6 +1149,25 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
   const allBatches=[...new Set(batchChapters.map(c=>c.batchCode))].sort();
   // Only show currently running (not completed) batches on the front page
   const batches=allBatches.filter(b=>!completedBatches.includes(b));
+
+  // NEW: group the running batches by category (falls back to "Others" for batches
+  // created before categories existed, or that never got one)
+  const [expandedCats,setExpandedCats]=useState({});
+  const categorized=useMemo(()=>{
+    const map={};
+    batches.forEach(b=>{
+      const chs=batchChapters.filter(c=>c.batchCode===b);
+      const cat=chs.find(c=>c.batchCategory)?.batchCategory || "Others";
+      if(!map[cat]) map[cat]=[];
+      map[cat].push(b);
+    });
+    // Keep a stable, sensible order: known categories first (in BATCH_CATEGORIES order), then anything else
+    const ordered=[];
+    BATCH_CATEGORIES.forEach(cat=>{ if(map[cat]) ordered.push([cat,map[cat]]); });
+    Object.keys(map).forEach(cat=>{ if(!BATCH_CATEGORIES.includes(cat)) ordered.push([cat,map[cat]]); });
+    return ordered;
+  },[batches,batchChapters]);
+  const toggleCat=cat=>setExpandedCats(prev=>({...prev,[cat]:!prev[cat]}));
 
   // NEW: monthly hours-taken view — data already existed per chapter (hourLogs), just aggregated here
   const allLogs=useMemo(()=>collectBatchLogs(batchChapters),[batchChapters]);
@@ -1193,30 +1239,54 @@ function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProf
             <button onClick={onAddBatch} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"9px 16px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:12,boxShadow:"0 4px 12px rgba(99,102,241,.3)",display:"flex",alignItems:"center",gap:6}}><Plus size={14} strokeWidth={2.8}/> New Batch</button>
           </div>
 
-          {batches.length>0&&(
+          {categorized.length>0&&(
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {batches.map((b,i)=>{
-                const bc=BATCH_COLORS[allBatches.indexOf(b)%BATCH_COLORS.length];
-                const chs=batchChapters.filter(c=>c.batchCode===b);
-                const done=chs.reduce((s,c)=>s+c.completedHours,0);
-                const total=chs.reduce((s,c)=>s+c.totalHours,0);
-                const p=total>0?(done/total)*100:0;
-                const completed=p>=100;
+              {categorized.map(([cat,catBatches])=>{
+                const open=!!expandedCats[cat];
+                const CatIcon=CATEGORY_ICONS[cat]||FolderOpen;
                 return(
-                  <div key={b} onClick={()=>onOpenBatch(b)} style={{background:"#fff",borderRadius:16,padding:"14px 16px",cursor:"pointer",borderLeft:`4px solid ${bc}`,boxShadow:"0 1px 8px rgba(0,0,0,.06)",display:"flex",alignItems:"center",gap:12}}>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:8}}>
-                        <div style={{fontSize:17,fontWeight:900,color:bc}}>{b}</div>
-                        <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:99,background:completed?"#fef3c7":"#eef2ff",color:completed?"#b45309":"#4338ca",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>{completed?<CheckCircle2 size={11}/>:<Clock size={11}/>}{completed?"Completed":"In Progress"}</span>
+                  <div key={cat} style={{background:"#fff",borderRadius:16,boxShadow:"0 1px 8px rgba(0,0,0,.06)",overflow:"hidden"}}>
+                    {/* NEW: category header — tap the triangle/chevron to expand and see the batches in it */}
+                    <div onClick={()=>toggleCat(cat)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",cursor:"pointer"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{width:34,height:34,borderRadius:10,background:"#eef2ff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <CatIcon size={16} color="#6366f1"/>
+                        </div>
+                        <div>
+                          <div style={{fontSize:14,fontWeight:800,color:"#0f172a"}}>{cat}</div>
+                          <div style={{fontSize:11,color:"#94a3b8",fontWeight:600}}>{catBatches.length} batch{catBatches.length===1?"":"es"}</div>
+                        </div>
                       </div>
-                      <div style={{fontSize:11,color:"#94a3b8",marginBottom:6}}>{chs.length} chapters</div>
-                      <div style={{background:"#f1f5f9",borderRadius:99,height:5}}>
-                        <div style={{width:`${Math.min(p,100)}%`,height:"100%",background:bc,borderRadius:99}}/>
-                      </div>
-                      <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{p.toFixed(0)}% Progress</div>
+                      {open?<ChevronUp size={22} color="#64748b" strokeWidth={3}/>:<ChevronRight size={22} color="#64748b" strokeWidth={3}/>}
                     </div>
-                    {/* NEW: bold, clearly-tappable chevron indicating the row opens the batch */}
-                    <ChevronRight size={24} color="#64748b" strokeWidth={3}/>
+                    {open&&(
+                      <div style={{padding:"0 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
+                        {catBatches.map(b=>{
+                          const bc=BATCH_COLORS[allBatches.indexOf(b)%BATCH_COLORS.length];
+                          const chs=batchChapters.filter(c=>c.batchCode===b);
+                          const done=chs.reduce((s,c)=>s+c.completedHours,0);
+                          const total=chs.reduce((s,c)=>s+c.totalHours,0);
+                          const p=total>0?(done/total)*100:0;
+                          const completed=p>=100;
+                          return(
+                            <div key={b} onClick={()=>onOpenBatch(b)} style={{background:"#f8fafc",borderRadius:14,padding:"14px 16px",cursor:"pointer",borderLeft:`4px solid ${bc}`,display:"flex",alignItems:"center",gap:12}}>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:8}}>
+                                  <div style={{fontSize:17,fontWeight:900,color:bc}}>{b}</div>
+                                  <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:99,background:completed?"#fef3c7":"#eef2ff",color:completed?"#b45309":"#4338ca",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>{completed?<CheckCircle2 size={11}/>:<Clock size={11}/>}{completed?"Completed":"In Progress"}</span>
+                                </div>
+                                <div style={{fontSize:11,color:"#94a3b8",marginBottom:6}}>{chs.length} chapters</div>
+                                <div style={{background:"#e2e8f0",borderRadius:99,height:5}}>
+                                  <div style={{width:`${Math.min(p,100)}%`,height:"100%",background:bc,borderRadius:99}}/>
+                                </div>
+                                <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{p.toFixed(0)}% Progress</div>
+                              </div>
+                              <ChevronRight size={22} color="#64748b" strokeWidth={3}/>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1632,6 +1702,8 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
   const headerTo=shadeColor(color,0.82);
   // NEW: teacher name entered when the batch was created (same for every chapter in it)
   const teacherName=chapters.find(c=>c.batchTeacher)?.batchTeacher;
+  // NEW: batch category selected at creation
+  const batchCategory=chapters.find(c=>c.batchCategory)?.batchCategory;
 
   const downloadCSV=()=>{
     const csv=buildBatchHistoryCSV(batchCode,chapters);
@@ -1662,6 +1734,7 @@ function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapt
             <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
               <div style={{fontSize:42,fontWeight:900,letterSpacing:"-1px"}}>{batchCode}</div>
               {completed&&<span style={{fontSize:11,fontWeight:800,padding:"5px 12px",borderRadius:99,background:"rgba(255,255,255,.22)",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5}}><CheckCircle2 size={12}/> Completed</span>}
+              {batchCategory&&<span style={{fontSize:11,fontWeight:800,padding:"5px 12px",borderRadius:99,background:"rgba(255,255,255,.22)",whiteSpace:"nowrap"}}>{batchCategory}</span>}
             </div>
             <div style={{fontSize:13,opacity:.75,marginTop:4}}>{chapters.length} chapter{chapters.length===1?"":"s"}{teacherName?` · Teacher: ${teacherName}`:""}</div>
           </div>
@@ -1792,7 +1865,7 @@ function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
   const status=getStatus(chapter.completedHours,chapter.totalHours);
 
   return(
-    <div style={{background:"#fff",borderRadius:18,marginBottom:12,boxShadow:"0 2px 12px rgba(0,0,0,.06)",border:`2px solid ${color}22`,overflow:"hidden"}}>
+    <div style={{background:"#fff",borderRadius:18,marginBottom:12,boxShadow:"0 2px 12px rgba(0,0,0,.06)",border:`2px solid ${color}22`,overflow:"visible"}}>
       {/* Header row */}
       <div style={{padding:"16px 16px 0 16px"}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
@@ -1836,11 +1909,13 @@ function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
           </div>
         )}
       </div>
-      {/* FIX #2: "Tap to open" as a proper colored banner at the bottom */}
-      <div onClick={onOpen}
-        style={{background:`linear-gradient(135deg,${color},${color}dd)`,padding:"11px 18px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:0}}>
-        <span style={{color:"#fff",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}><BookOpen size={15}/> Open Chapter</span>
-        <span style={{color:"rgba(255,255,255,.85)",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>Log hours, topics & notes <ChevronRight size={13}/></span>
+      {/* Separated, larger "Open Chapter" button — its own rounded card with margin so it stands out */}
+      <div style={{padding:"4px 14px 14px"}}>
+        <div onClick={onOpen}
+          style={{background:`linear-gradient(135deg,${color},${color}dd)`,padding:"16px 20px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",borderRadius:14,boxShadow:`0 6px 18px ${color}55`}}>
+          <span style={{color:"#fff",fontSize:15,fontWeight:800,display:"flex",alignItems:"center",gap:8}}><BookOpen size={18}/> Open Chapter</span>
+          <span style={{color:"rgba(255,255,255,.9)",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>Log hours, topics & notes <ChevronRight size={16}/></span>
+        </div>
       </div>
     </div>
   );
@@ -2450,13 +2525,14 @@ export default function App() {
   };
 
   // FIX #1 & #5: addBatch copies topics from master chapters
-  const addBatch=async({batchCode,teacherName,rows})=>{
+  // UPDATED: also stores batchCategory
+  const addBatch=async({batchCode,teacherName,batchCategory,rows})=>{
     const newChapters=[];
     for(const row of rows){
       const master=masterChapters.find(mc=>mc.name.toLowerCase()===row.name.trim().toLowerCase());
       // Copy topics from master, resetting done state
       const topics=master?master.topics.map(t=>({...t,id:uid(),done:false})):[];
-      const nc={id:uid(),name:row.name.trim(),batchCode,totalHours:parseFloat(row.hours),completedHours:0,extraHours:0,topics,notes:"",lastCompletedTopic:null,hourLogs:[],batchTeacher:teacherName||null};
+      const nc={id:uid(),name:row.name.trim(),batchCode,totalHours:parseFloat(row.hours),completedHours:0,extraHours:0,topics,notes:"",lastCompletedTopic:null,hourLogs:[],batchTeacher:teacherName||null,batchCategory:batchCategory||null};
       newChapters.push(nc);
     }
     setChapters(prev=>[...prev,...newChapters]);
