@@ -1013,7 +1013,7 @@ function BatchFormModal({onSave,onClose,subject,masterChapters}) {
       </div>
       <div style={{marginBottom:14}}>
         <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Teacher Name (optional)</label>
-        <input value={teacherName} onChange={e=>setTeacherName(e.target.value)} placeholder="e.g. Alice"
+        <input value={teacherName} onChange={e=>setTeacherName(e.target.value)} placeholder="e.g. Sreekutty"
           style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
       </div>
       <div style={{fontSize:13,fontWeight:700,color:"#475569",marginBottom:8}}>Chapters in this batch:</div>
@@ -1792,7 +1792,7 @@ function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
   const status=getStatus(chapter.completedHours,chapter.totalHours);
 
   return(
-    <div style={{background:"#fff",borderRadius:18,marginBottom:12,boxShadow:"0 2px 12px rgba(0,0,0,.06)",border:`2px solid ${color}22`,overflow:"visible"}}>
+    <div style={{background:"#fff",borderRadius:18,marginBottom:12,boxShadow:"0 2px 12px rgba(0,0,0,.06)",border:`2px solid ${color}22`,overflow:"hidden"}}>
       {/* Header row */}
       <div style={{padding:"16px 16px 0 16px"}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
@@ -1836,13 +1836,11 @@ function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
           </div>
         )}
       </div>
-      {/* Separated, larger "Open Chapter" button — its own rounded card with margin so it stands out */}
-      <div style={{padding:"4px 14px 14px"}}>
-        <div onClick={onOpen}
-          style={{background:`linear-gradient(135deg,${color},${color}dd)`,padding:"16px 20px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",borderRadius:14,boxShadow:`0 6px 18px ${color}55`}}>
-          <span style={{color:"#fff",fontSize:15,fontWeight:800,display:"flex",alignItems:"center",gap:8}}><BookOpen size={18}/> Open Chapter</span>
-          <span style={{color:"rgba(255,255,255,.9)",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>Log hours, topics & notes <ChevronRight size={16}/></span>
-        </div>
+      {/* FIX #2: "Tap to open" as a proper colored banner at the bottom */}
+      <div onClick={onOpen}
+        style={{background:`linear-gradient(135deg,${color},${color}dd)`,padding:"11px 18px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:0}}>
+        <span style={{color:"#fff",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}><BookOpen size={15}/> Open Chapter</span>
+        <span style={{color:"rgba(255,255,255,.85)",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>Log hours, topics & notes <ChevronRight size={13}/></span>
       </div>
     </div>
   );
