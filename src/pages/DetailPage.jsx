@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   ArrowLeft, Share2, Download, Clock, CheckCircle2, Hourglass, Star,
   AlertTriangle, Calendar, FileText, ClipboardList, Pencil, Trash2,
@@ -38,12 +38,14 @@ export default function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
       setNotes(chapter.notes||"");
       prevNotesRef.current=chapter.notes||"";
     }
-  },[chapter.id]);
+  },[chapter.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pct=chapter.totalHours>0?(chapter.completedHours/chapter.totalHours)*100:0;
   const remaining=Math.max(0,chapter.totalHours-chapter.completedHours);
   const status=getStatus(chapter.completedHours,chapter.totalHours);
-  const logs=chapter.hourLogs||[];
+  // Memoized so useCallback hooks below that depend on `logs` don't see a new
+  // array reference (and re-create themselves) on every single render.
+  const logs=useMemo(()=>chapter.hourLogs||[],[chapter.hourLogs]);
 
   // Auto-detect extra hours — if adding logH hours would exceed allotted, auto-flag as extra
   const logHoursVal = toHoursFromInput(logH, logUnit);
