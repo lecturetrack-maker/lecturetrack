@@ -108,7 +108,7 @@ export default function App() {
       const stored=localStorage.getItem(`lt_completed_${profile.code}`);
       setCompletedBatches(stored?JSON.parse(stored):[]);
     }catch{setCompletedBatches([]);}
-  },[profile?.code]);
+  },[profile?.code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Toggle a batch's completed status and persist it
   const toggleBatchCompleted=useCallback((batchCode)=>{
@@ -154,7 +154,7 @@ export default function App() {
       const dismissed=localStorage.getItem(`lt_whatsnew_${WHATS_NEW_ID}_${profile.code}`);
       if(!dismissed) setShowWhatsNew(true);
     }catch{}
-  },[profile?.code]);
+  },[profile?.code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live sync — listen for changes made from OTHER devices/tabs (needs Realtime
   // enabled on the "chapters" and "teachers" tables in Supabase → Database → Replication)
@@ -187,7 +187,7 @@ export default function App() {
         })
       .subscribe();
     return ()=>{ supabase.removeChannel(channel); };
-  },[profile?.code]);
+  },[profile?.code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fallback for when Realtime isn't enabled on the Supabase project — re-pull the
   // latest data whenever the app/tab regains focus, so switching back to it shows updates
@@ -215,7 +215,7 @@ export default function App() {
       document.removeEventListener("visibilitychange",refetch);
       window.removeEventListener("focus",refetch);
     };
-  },[profile?.code]);
+  },[profile?.code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const syncChapter=useCallback(async chapter=>{
     if(!profile) return;
