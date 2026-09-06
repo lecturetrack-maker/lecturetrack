@@ -18,7 +18,7 @@ export default function BatchFormModal({onSave,onClose,subject,masterChapters}) 
     rows.forEach(r => {
       if(!rowDataRef.current[r.id]) rowDataRef.current[r.id] = {name:"",hours:""};
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addRow = () => {
     const newId = uid();
