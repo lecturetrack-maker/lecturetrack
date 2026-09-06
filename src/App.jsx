@@ -52,6 +52,9 @@ export default function App() {
   // Tracks which batch codes have been marked "Completed" so they can be hidden from the Home tab
   const [completedBatches,setCompletedBatches]=useState([]);
   const [travelLogs,setTravelLogs]=useState([]);
+  // Set when the travel_logs fetch fails (missing table / RLS blocking reads / network),
+  // so the Travel page can show the person a real reason instead of a silently-empty list.
+  const [travelLoadError,setTravelLoadError]=useState(null);
   const [showWhatsNew,setShowWhatsNew]=useState(false);
 
   // Phone back-button support. Without this, opening a batch or a chapter's detail page
@@ -146,8 +149,15 @@ export default function App() {
     // Load this teacher's travel log entries
     supabase.from("travel_logs").select("*").eq("teacher_code",profile.code).order("date",{ascending:false})
       .then(({data,error})=>{
-        if(!error&&data) setTravelLogs(data.map(trFromRow));
-        // if the table doesn't exist yet, silently ignore — Travel Details will just start empty
+        if(!error&&data){
+          setTravelLogs(data.map(trFromRow));
+          setTravelLoadError(null);
+        } else if(error){
+          // Surface the real reason (missing table, RLS blocking reads, etc.) instead of
+          // silently leaving the list empty — check the browser console for the message.
+          console.error("travel_logs fetch failed:", error.message);
+          setTravelLoadError(error.message);
+        }
       });
     // Show the "What's New" popup unless this teacher already dismissed this version of it
     try{
@@ -331,18 +341,21 @@ export default function App() {
     setTravelLogs(prev=>[entry,...prev]);
     const {error}=await supabase.from("travel_logs").insert(trToRow(profile.code,entry));
     if(error){
+      console.error("travel_logs insert failed:", error.message);
       setSyncStatus("error");
       setTimeout(()=>setSyncStatus(null),2500);
     }
   };
   const editTravelEntry=async(entry)=>{
     setTravelLogs(prev=>prev.map(t=>t.id===entry.id?entry:t));
-    await supabase.from("travel_logs").upsert(trToRow(profile.code,entry),{onConflict:"id"});
+    const {error}=await supabase.from("travel_logs").upsert(trToRow(profile.code,entry),{onConflict:"id"});
+    if(error) console.error("travel_logs update failed:", error.message);
   };
   const deleteTravelEntry=async(id)=>{
     if(!window.confirm("Remove this trip?")) return;
     setTravelLogs(prev=>prev.filter(t=>t.id!==id));
-    await supabase.from("travel_logs").delete().eq("id",id);
+    const {error}=await supabase.from("travel_logs").delete().eq("id",id);
+    if(error) console.error("travel_logs delete failed:", error.message);
   };
 
   const logout=()=>{localStorage.removeItem("lt_session");window.location.reload();};
@@ -393,7 +406,8 @@ export default function App() {
     return(
       <><style>{STYLE}</style>
       <TravelPage travelLogs={travelLogs} profile={profile} onBack={goBackFromTravel}
-        onAdd={addTravelEntry} onEdit={editTravelEntry} onDelete={deleteTravelEntry}/>
+        onAdd={addTravelEntry} onEdit={editTravelEntry} onDelete={deleteTravelEntry}
+        loadError={travelLoadError}/>
       </>
     );
   }
