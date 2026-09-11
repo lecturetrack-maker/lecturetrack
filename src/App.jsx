@@ -56,6 +56,9 @@ export default function App() {
   // so the Travel page can show the person a real reason instead of a silently-empty list.
   const [travelLoadError,setTravelLoadError]=useState(null);
   const [showWhatsNew,setShowWhatsNew]=useState(false);
+  // Picked once when the app first loads (not on every tab switch) so the Home tab's
+  // "This Month" card shows a different color theme each time you reopen the app.
+  const [bannerTheme]=useState(()=>Math.floor(Math.random()*3));
 
   // Phone back-button support. Without this, opening a batch or a chapter's detail page
   // doesn't add anything to browser history, so the hardware/gesture back button closes
@@ -423,7 +426,7 @@ export default function App() {
         </div>
       ):(
         <>
-          {tab==="home"&&<HomeTab chapters={batchChapters} profile={profile} onOpenChapter={openDetail} onOpenBatch={openBatchView} syncStatus={syncStatus} onGoProfile={()=>setTab("profile")} completedBatches={completedBatches} onAddBatch={()=>setAddBatchOpen(true)}/>}
+          {tab==="home"&&<HomeTab chapters={batchChapters} profile={profile} onOpenChapter={openDetail} onOpenBatch={openBatchView} syncStatus={syncStatus} onGoProfile={()=>setTab("profile")} completedBatches={completedBatches} onAddBatch={()=>setAddBatchOpen(true)} bannerTheme={bannerTheme}/>}
           {tab==="batches"&&<BatchesTab chapters={batchChapters} onOpenBatch={openBatchView} onDeleteBatch={deleteBatch} onAddBatch={()=>setAddBatchOpen(true)} completedBatches={completedBatches}/>}
           {tab==="chapters"&&<ChaptersTab masterChapters={masterChapters} onOpenMaster={c=>setEditMaster(c)} onAddMaster={()=>setAddMasterOpen(true)} onDeleteMaster={deleteMasterChapter}/>}
           {tab==="profile"&&<ProfileTab profile={profile} chapters={batchChapters} onLogout={logout} onUpdateProfile={p=>setProfile(p)} onOpenTravel={openTravelView}/>}
