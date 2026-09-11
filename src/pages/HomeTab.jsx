@@ -6,9 +6,18 @@ import PBar from "../components/PBar";
 import { BATCH_COLORS, BATCH_CATEGORIES, CATEGORY_ICONS } from "../lib/constants";
 import { fmtHours, todayStr, collectBatchLogs, monthKey, monthLabel, monthlyTotals } from "../lib/helpers";
 
+// 3 color themes for the "This Month" hero card — App.jsx picks one at random
+// each time the app is freshly opened (not on every tab switch) and passes it
+// down as bannerTheme (0, 1, or 2).
+const BANNER_THEMES=[
+  {gradient:"linear-gradient(135deg,#4f46e5 0%,#7c3aed 60%,#6366f1 100%)",shadow:"rgba(79,70,229,.25)"},
+  {gradient:"linear-gradient(135deg,#0d9488 0%,#059669 60%,#10b981 100%)",shadow:"rgba(5,150,105,.25)"},
+  {gradient:"linear-gradient(135deg,#e11d48 0%,#f97316 60%,#f59e0b 100%)",shadow:"rgba(225,29,72,.25)"},
+];
+
 // Batches are grouped by category into collapsible sections; accepts completedBatches
 // so the batch list on the front page only shows running batches.
-export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProfile,completedBatches=[],onAddBatch}) {
+export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProfile,completedBatches=[],onAddBatch,bannerTheme=0}) {
   const batchChapters=chapters.filter(c=>c.batchCode);
   const totalAllotted=batchChapters.reduce((s,c)=>s+c.totalHours,0);
   const totalDoneAllTime=batchChapters.reduce((s,c)=>s+c.completedHours,0);
@@ -69,7 +78,7 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
         </div>
       </div>
 
-      <div style={{margin:"0 16px 20px",background:"linear-gradient(135deg,#4f46e5 0%,#7c3aed 60%,#6366f1 100%)",borderRadius:24,padding:"22px 20px",color:"#fff",boxShadow:"0 10px 30px rgba(79,70,229,.25)"}}>
+      <div style={{margin:"0 16px 20px",background:BANNER_THEMES[bannerTheme]?.gradient||BANNER_THEMES[0].gradient,borderRadius:24,padding:"22px 20px",color:"#fff",boxShadow:`0 10px 30px ${BANNER_THEMES[bannerTheme]?.shadow||BANNER_THEMES[0].shadow}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <div>
             <div style={{fontSize:12,opacity:.7,fontWeight:600}}>Overview</div>
