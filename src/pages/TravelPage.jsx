@@ -1,11 +1,11 @@
 import { useState, useMemo } from "react";
-import { ArrowLeft, Plane, MessageCircle, Download, Plus, Navigation, Calendar, Pencil, Trash2, ArrowRight } from "lucide-react";
+import { ArrowLeft, Plane, MessageCircle, Download, Plus, Navigation, Calendar, Pencil, Trash2, ArrowRight, AlertTriangle } from "lucide-react";
 import TravelEntryModal from "../components/TravelEntryModal";
 import { buildTravelCSV } from "../lib/helpers";
 import { shareTravelImage } from "../lib/shareImages";
 import { monthKey, monthLabel, todayStr, fmtDate } from "../lib/helpers";
 
-export default function TravelPage({travelLogs,profile,onBack,onAdd,onEdit,onDelete}) {
+export default function TravelPage({travelLogs,profile,onBack,onAdd,onEdit,onDelete,loadError}) {
   const [addOpen,setAddOpen]=useState(false);
   const [editEntry,setEditEntry]=useState(null);
   const [sharing,setSharing]=useState(false);
@@ -50,6 +50,15 @@ export default function TravelPage({travelLogs,profile,onBack,onAdd,onEdit,onDel
       </div>
 
       <div style={{padding:"20px 16px 90px"}}>
+        {loadError&&(
+          <div style={{background:"#fee2e2",border:"2px solid #fecaca",borderRadius:14,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"flex-start",gap:10}}>
+            <AlertTriangle size={18} color="#dc2626" style={{flexShrink:0,marginTop:1}}/>
+            <div>
+              <div style={{fontSize:13,fontWeight:800,color:"#991b1b"}}>Couldn't load your saved trips</div>
+              <div style={{fontSize:12,color:"#b91c1c",marginTop:2}}>Only trips added this session are showing below. Check your internet connection, or ask whoever set up the app to check the travel_logs table in Supabase.</div>
+            </div>
+          </div>
+        )}
         <div style={{display:"flex",gap:10,marginBottom:16}}>
           <button onClick={shareWhatsApp} disabled={sharing} style={{flex:1,padding:"13px",background:"#fff",color:"#16a34a",border:"2px solid #bbf7d0",borderRadius:14,fontWeight:800,cursor:sharing?"default":"pointer",fontFamily:"inherit",fontSize:13,opacity:sharing?.7:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
             <MessageCircle size={16}/> {sharing?"…":"Share to WhatsApp"}
