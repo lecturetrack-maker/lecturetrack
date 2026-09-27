@@ -33,6 +33,13 @@ const STYLE=`
   input,textarea,select{touch-action:manipulation;}
 `;
 
+// Congrats screen ("You've completed 100h!") should only ever be shown once per
+// teacher, ever — persisted in localStorage (same pattern as the What's New popup's
+// "don't show again"), rather than relying on an in-memory ref that resets on every
+// fresh app load/reopen.
+const hasSeenCongrats=code=>{ try{ return !!code && localStorage.getItem(`lt_congrats_seen_${code}`)==="1"; }catch{ return false; } };
+const markCongratsSeen=code=>{ try{ if(code) localStorage.setItem(`lt_congrats_seen_${code}`,"1"); }catch{} };
+
 export default function App() {
   const [splashDone,setSplashDone]=useState(false);
   const [profile,setProfile]=useState(()=>{try{const s=localStorage.getItem("lt_session");return s?JSON.parse(s):null;}catch{return null;}});
@@ -142,9 +149,9 @@ export default function App() {
         if(!error&&data){
           const chs=data.map(fromRow);
           setChapters(chs);
-          if(!congratsShown.current){
+          if(!congratsShown.current && !hasSeenCongrats(profile.code)){
             const td=chs.filter(c=>c.batchCode).reduce((s,c)=>s+c.completedHours,0);
-            if(td>=100){setShowCongrats(true);congratsShown.current=true;}
+            if(td>=100){setShowCongrats(true);congratsShown.current=true;markCongratsSeen(profile.code);}
           }
         }
         setLoading(false);
@@ -241,14 +248,14 @@ export default function App() {
   const updateChapter=useCallback(updated=>{
     setChapters(prev=>{
       const next=prev.map(c=>c.id===updated.id?updated:c);
-      if(!congratsShown.current){
+      if(!congratsShown.current && !hasSeenCongrats(profile?.code)){
         const td=next.filter(c=>c.batchCode).reduce((s,c)=>s+c.completedHours,0);
-        if(td>=100){setShowCongrats(true);congratsShown.current=true;}
+        if(td>=100){setShowCongrats(true);congratsShown.current=true;markCongratsSeen(profile?.code);}
       }
       return next;
     });
     syncChapter(updated);
-  },[syncChapter]);
+  },[syncChapter,profile?.code]);
 
   const masterChapters=useMemo(()=>chapters.filter(c=>!c.batchCode),[chapters]);
   const batchChapters=useMemo(()=>chapters.filter(c=>c.batchCode),[chapters]);
