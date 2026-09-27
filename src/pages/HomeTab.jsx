@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Bell, User as UserIcon, FolderOpen, Plus, Clock, ClipboardList, Star, BarChart3, ChevronUp, ChevronRight, Inbox, PartyPopper, CheckCircle2 } from "lucide-react";
+import { Bell, User as UserIcon, FolderOpen, Plus, Clock, ClipboardList, Star, BarChart3, ChevronUp, ChevronRight, Inbox, PartyPopper, CheckCircle2, AlertTriangle } from "lucide-react";
 import SubjectIcon from "../components/SubjectIcon";
 import SyncBadge from "../components/SyncBadge";
 import PBar from "../components/PBar";
@@ -144,18 +144,29 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
                           const done=chs.reduce((s,c)=>s+c.completedHours,0);
                           const total=chs.reduce((s,c)=>s+c.totalHours,0);
                           const p=total>0?(done/total)*100:0;
-                          const completed=p>=100;
+                          // Chapter name(s) for this batch — shown in place of a bare
+                          // chapter count so teachers can see at a glance what a batch covers.
+                          const chapterNamesLabel=chs.map(c=>c.name).filter(Boolean).join(", ")||`${chs.length} chapter${chs.length===1?"":"s"}`;
+                          // "Completed" now requires BOTH the allotted hours being fully
+                          // used up AND every topic across the batch's chapters checked off.
+                          // Hitting 100% of the allotted hours while topics remain unchecked
+                          // is a distinct state — the hours ran out, not the chapter.
+                          const hoursComplete=p>=100;
+                          const allTopicsDone=chs.every(c=>(c.topics||[]).length===0||c.topics.every(t=>t.done));
+                          const completed=hoursComplete&&allTopicsDone;
+                          const topicsPending=hoursComplete&&!allTopicsDone;
                           return(
                             <div key={b} onClick={()=>onOpenBatch(b)} style={{background:"#f8fafc",borderRadius:14,padding:"14px 16px",cursor:"pointer",borderLeft:`4px solid ${bc}`,display:"flex",alignItems:"center",gap:12}}>
                               <div style={{flex:1,minWidth:0}}>
                                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:8}}>
                                   <div style={{fontSize:17,fontWeight:900,color:bc}}>{b}</div>
-                                  <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:99,background:completed?"#fef3c7":"#eef2ff",color:completed?"#b45309":"#4338ca",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>{completed?<CheckCircle2 size={11}/>:<Clock size={11}/>}{completed?"Completed":"In Progress"}</span>
+                                  <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:99,background:completed?"#fef3c7":topicsPending?"#fee2e2":"#eef2ff",color:completed?"#b45309":topicsPending?"#b91c1c":"#4338ca",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>
+                                    {completed?<CheckCircle2 size={11}/>:topicsPending?<AlertTriangle size={11}/>:<Clock size={11}/>}
+                                    {completed?"Completed":topicsPending?"Topics Pending":"In Progress"}
+                                  </span>
                                 </div>
-                                <div style={{fontSize:11,color:"#94a3b8",marginBottom:6}}>{chs.length} chapters</div>
-                                <div style={{background:"#e2e8f0",borderRadius:99,height:5}}>
-                                  <div style={{width:`${Math.min(p,100)}%`,height:"100%",background:bc,borderRadius:99}}/>
-                                </div>
+                                <div title={chapterNamesLabel} style={{fontSize:11,color:"#94a3b8",marginBottom:6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{chapterNamesLabel}</div>
+                                <PBar pct={p} color={bc} bg="#e2e8f0" height={5}/>
                                 <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>{p.toFixed(0)}% Progress</div>
                               </div>
                               <ChevronRight size={22} color="#64748b" strokeWidth={3}/>
