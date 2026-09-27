@@ -33,6 +33,10 @@ export default function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
   // topics are still unchecked — nudges the teacher to log the remainder as extra hours
   // instead of assuming the chapter is actually finished.
   const [showAllottedPrompt,setShowAllottedPrompt]=useState(false);
+  // Once the teacher taps "Yes" on that prompt, the banner switches from a
+  // yes/no question into an inline "how much extra time?" input (reuses the
+  // same extraH/extraUnit state as the Extra Hours section below).
+  const [askExtraAmount,setAskExtraAmount]=useState(false);
   const ntRef=useRef(null);
 
   // Keep local notes in sync if chapter changes from outside
@@ -80,7 +84,7 @@ export default function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
     // from here on (via the Extra Hours section below) as a red overflow segment.
     const justReachedAllotted = chapter.totalHours>0 && currentCompleted<chapter.totalHours && newCompleted>=chapter.totalHours;
     const topicsPending = (chapter.topics||[]).length>0 && chapter.topics.some(t=>!t.done);
-    if(justReachedAllotted && topicsPending) setShowAllottedPrompt(true);
+    if(justReachedAllotted && topicsPending){ setShowAllottedPrompt(true); setAskExtraAmount(false); }
   },[logH,logUnit,logDate,logNote,chapter,logs,onUpdate]);
 
   const logExtra=useCallback(()=>{
@@ -96,6 +100,7 @@ export default function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
     onUpdate({...chapter,completedHours:newCompleted,hourLogs:[...logs,newLog]});
     setExtraH("");setLogNote("");
     setShowAllottedPrompt(false);
+    setAskExtraAmount(false);
   },[extraH,extraUnit,logDate,logNote,chapter,logs,onUpdate]);
 
   const deleteLog=useCallback(logId=>{
@@ -181,11 +186,35 @@ export default function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
                 <AlertTriangle size={18} color="#dc2626"/>
                 <div style={{fontSize:12,fontWeight:800,color:"#b91c1c"}}>Allotted hours reached, but topics are still pending</div>
               </div>
-              <div style={{fontSize:12,color:"#991b1b",marginBottom:10}}>Do you need extra hours to finish the remaining topics?</div>
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={()=>setShowAllottedPrompt(false)} style={{flex:1,background:"#dc2626",color:"#fff",border:"none",borderRadius:10,padding:"9px 0",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Yes, I'll log extra hours</button>
-                <button onClick={()=>setShowAllottedPrompt(false)} style={{flex:1,background:"#fff",color:"#b91c1c",border:"2px solid #fecaca",borderRadius:10,padding:"9px 0",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>No</button>
-              </div>
+              {!askExtraAmount?(
+                <>
+                  <div style={{fontSize:12,color:"#991b1b",marginBottom:10}}>Do you need extra hours to finish the remaining topics?</div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>setAskExtraAmount(true)} style={{flex:1,background:"#dc2626",color:"#fff",border:"none",borderRadius:10,padding:"9px 0",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Yes</button>
+                    <button onClick={()=>setShowAllottedPrompt(false)} style={{flex:1,background:"#fff",color:"#b91c1c",border:"2px solid #fecaca",borderRadius:10,padding:"9px 0",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>No</button>
+                  </div>
+                </>
+              ):(
+                <>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div style={{fontSize:12,color:"#991b1b",fontWeight:700}}>How much extra time do you need?</div>
+                    <UnitToggle unit={extraUnit} onChange={setExtraUnit} activeColor="#b91c1c" trackBg="#fecaca66" activeBg="#fff"/>
+                  </div>
+                  <div style={{flex:1,marginBottom:10}}>
+                    <input type="number" min={0} step={extraUnit==="minutes"?1:0.0833} value={extraH}
+                      onChange={e=>setExtraH(e.target.value)}
+                      onKeyDown={e=>e.key==="Enter"&&logExtra()}
+                      placeholder={extraUnit==="minutes"?"e.g. 15":"e.g. 0.5"}
+                      autoFocus
+                      style={{width:"100%",padding:"11px 14px",border:"2px solid #fecaca",borderRadius:10,fontSize:14,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}/>
+                    {extraH&&<div style={{fontSize:11,color:"#b91c1c",marginTop:3,fontWeight:700}}>= {fmtHours(toHoursFromInput(extraH,extraUnit))}</div>}
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={logExtra} style={{flex:1,background:"#dc2626",color:"#fff",border:"none",borderRadius:10,padding:"9px 0",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Add Extra Hours</button>
+                    <button onClick={()=>{setShowAllottedPrompt(false);setAskExtraAmount(false);}} style={{flex:1,background:"#fff",color:"#b91c1c",border:"2px solid #fecaca",borderRadius:10,padding:"9px 0",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Cancel</button>
+                  </div>
+                </>
+              )}
             </div>
           )}
           <div style={{marginBottom:12}}>
