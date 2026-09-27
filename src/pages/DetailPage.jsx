@@ -29,6 +29,10 @@ export default function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
   const [showLogs,setShowLogs]=useState(false);
   const [editLog,setEditLog]=useState(null);
   const [sharing,setSharing]=useState(false);
+  // Shown once, right after a log entry brings completedHours to/beyond totalHours while
+  // topics are still unchecked — nudges the teacher to log the remainder as extra hours
+  // instead of assuming the chapter is actually finished.
+  const [showAllottedPrompt,setShowAllottedPrompt]=useState(false);
   const ntRef=useRef(null);
 
   // Keep local notes in sync if chapter changes from outside
@@ -69,6 +73,14 @@ export default function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
     const newLog={id:uid(),hours:h,date:logDate,note:logNote,type:extraPortion>0?"extra":"regular",extraAmount:extraPortion,extraNote:extraPortion>0?`(includes ${fmtHours(extraPortion)} extra)`:""};
     onUpdate({...chapter,completedHours:newCompleted,hourLogs:[...logs,newLog]});
     setLogH("");setLogNote("");
+
+    // If this log just brought the chapter to/beyond its allotted hours for the first
+    // time, but topics are still unchecked, flag it — the chapter isn't actually done,
+    // it just ran out of allotted time. The progress bar will show any hours logged
+    // from here on (via the Extra Hours section below) as a red overflow segment.
+    const justReachedAllotted = chapter.totalHours>0 && currentCompleted<chapter.totalHours && newCompleted>=chapter.totalHours;
+    const topicsPending = (chapter.topics||[]).length>0 && chapter.topics.some(t=>!t.done);
+    if(justReachedAllotted && topicsPending) setShowAllottedPrompt(true);
   },[logH,logUnit,logDate,logNote,chapter,logs,onUpdate]);
 
   const logExtra=useCallback(()=>{
@@ -83,6 +95,7 @@ export default function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
     const newLog={id:uid(),hours:h,date:logDate,note:logNote||"Extra",type:"extra",extraAmount:extraPortion};
     onUpdate({...chapter,completedHours:newCompleted,hourLogs:[...logs,newLog]});
     setExtraH("");setLogNote("");
+    setShowAllottedPrompt(false);
   },[extraH,extraUnit,logDate,logNote,chapter,logs,onUpdate]);
 
   const deleteLog=useCallback(logId=>{
@@ -162,6 +175,19 @@ export default function DetailPage({chapter,color,onUpdate,onBack,syncStatus}) {
 
       <div style={{padding:"20px 16px 80px",maxWidth:560,margin:"0 auto"}}>
         <Sec title={<span style={{display:"flex",alignItems:"center",gap:8}}><Calendar size={16}/> Log Class Hours</span>}>
+          {showAllottedPrompt&&(
+            <div style={{background:"linear-gradient(135deg,#fef2f2,#fee2e2)",border:"2px solid #fecaca",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <AlertTriangle size={18} color="#dc2626"/>
+                <div style={{fontSize:12,fontWeight:800,color:"#b91c1c"}}>Allotted hours reached, but topics are still pending</div>
+              </div>
+              <div style={{fontSize:12,color:"#991b1b",marginBottom:10}}>Do you need extra hours to finish the remaining topics?</div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setShowAllottedPrompt(false)} style={{flex:1,background:"#dc2626",color:"#fff",border:"none",borderRadius:10,padding:"9px 0",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Yes, I'll log extra hours</button>
+                <button onClick={()=>setShowAllottedPrompt(false)} style={{flex:1,background:"#fff",color:"#b91c1c",border:"2px solid #fecaca",borderRadius:10,padding:"9px 0",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>No</button>
+              </div>
+            </div>
+          )}
           <div style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
               <label style={{fontSize:13,fontWeight:700,color:"#475569"}}>Log Time</label>
