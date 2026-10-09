@@ -4,7 +4,7 @@ import SubjectIcon from "../components/SubjectIcon";
 import SyncBadge from "../components/SyncBadge";
 import PBar from "../components/PBar";
 import { BATCH_COLORS, BATCH_CATEGORIES, CATEGORY_ICONS } from "../lib/constants";
-import { fmtHours, todayStr, collectBatchLogs, monthKey, monthLabel, monthlyTotals } from "../lib/helpers";
+import { fmtHours, todayStr, collectBatchLogs, monthKey, monthLabel, monthlyTotals, dailyTotals } from "../lib/helpers";
 
 // 3 color themes for the "This Month" hero card — App.jsx picks one at random
 // each time the app is freshly opened (not on every tab switch) and passes it
@@ -58,6 +58,27 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
   const [selMonth,setSelMonth]=useState(monthKey(todayStr()));
   const {taken:monthTaken,extra:monthExtra}=useMemo(()=>monthlyTotals(batchChapters,selMonth),[batchChapters,selMonth]);
 
+  // "Hours Taken"/"Extra Hours" can show Today (default), Yesterday, or a picked month.
+  // Allotted (Total) and Overall Progress stay all-time regardless — they describe
+  // the whole scope of work, not a time window.
+  const [hoursPeriod,setHoursPeriod]=useState("today"); // "today" | "yesterday" | "month"
+  const yesterdayStr=useMemo(()=>{
+    const d=new Date();
+    d.setDate(d.getDate()-1);
+    return d.toISOString().split("T")[0];
+  },[]);
+  const {periodTaken,periodExtra,periodLabel}=useMemo(()=>{
+    if(hoursPeriod==="yesterday"){
+      const {taken,extra}=dailyTotals(batchChapters,yesterdayStr);
+      return {periodTaken:taken,periodExtra:extra,periodLabel:"Yesterday"};
+    }
+    if(hoursPeriod==="month"){
+      return {periodTaken:monthTaken,periodExtra:monthExtra,periodLabel:monthLabel(selMonth)};
+    }
+    const {taken,extra}=dailyTotals(batchChapters,todayStr());
+    return {periodTaken:taken,periodExtra:extra,periodLabel:"Today"};
+  },[hoursPeriod,batchChapters,yesterdayStr,monthTaken,monthExtra,selMonth]);
+
   return(
     <div style={{padding:"0 0 20px"}}>
       <div style={{padding:"20px 16px 0"}}>
@@ -79,21 +100,31 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
       </div>
 
       <div style={{margin:"0 16px 20px",background:BANNER_THEMES[bannerTheme]?.gradient||BANNER_THEMES[0].gradient,borderRadius:24,padding:"22px 20px",color:"#fff",boxShadow:`0 10px 30px ${BANNER_THEMES[bannerTheme]?.shadow||BANNER_THEMES[0].shadow}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
           <div>
             <div style={{fontSize:12,opacity:.7,fontWeight:600}}>Overview</div>
-            <div style={{fontSize:19,fontWeight:900}}>This Month</div>
+            <div style={{fontSize:19,fontWeight:900}}>{periodLabel}</div>
           </div>
-          <select value={selMonth} onChange={e=>setSelMonth(e.target.value)}
-            style={{background:"rgba(255,255,255,.2)",color:"#fff",border:"none",borderRadius:99,padding:"7px 14px",fontWeight:700,fontSize:12,fontFamily:"inherit",outline:"none"}}>
-            {availableMonths.map(m=><option key={m} value={m} style={{color:"#0f172a"}}>{monthLabel(m)}</option>)}
-          </select>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <div style={{display:"flex",background:"rgba(255,255,255,.15)",borderRadius:99,padding:3,gap:2}}>
+              {[{key:"today",label:"Today"},{key:"yesterday",label:"Yesterday"}].map(opt=>(
+                <button key={opt.key} onClick={()=>setHoursPeriod(opt.key)}
+                  style={{background:hoursPeriod===opt.key?"#fff":"transparent",color:hoursPeriod===opt.key?"#4338ca":"#fff",border:"none",borderRadius:99,padding:"6px 12px",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <select value={selMonth} onChange={e=>{setSelMonth(e.target.value);setHoursPeriod("month");}}
+              style={{background:hoursPeriod==="month"?"rgba(255,255,255,.35)":"rgba(255,255,255,.2)",color:"#fff",border:"none",borderRadius:99,padding:"7px 14px",fontWeight:700,fontSize:12,fontFamily:"inherit",outline:"none"}}>
+              {availableMonths.map(m=><option key={m} value={m} style={{color:"#0f172a"}}>{monthLabel(m)}</option>)}
+            </select>
+          </div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
           {[
-            {label:"Hours Taken",val:fmtHours(monthTaken),Icon:Clock},
+            {label:"Hours Taken",val:fmtHours(periodTaken),Icon:Clock},
             {label:"Allotted (Total)",val:fmtHours(totalAllotted),Icon:ClipboardList},
-            {label:"Extra Hours",val:fmtHours(monthExtra),Icon:Star},
+            {label:"Extra Hours",val:fmtHours(periodExtra),Icon:Star},
             {label:"Overall Progress",val:pctAllTime.toFixed(0)+"%",Icon:BarChart3},
           ].map(s=>(
             <div key={s.label} style={{background:"rgba(255,255,255,.15)",borderRadius:16,padding:"12px 14px"}}>
