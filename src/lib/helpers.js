@@ -149,6 +149,22 @@ export function monthlyTotals(chapters, mKey) {
   return {taken:roundToMinute(taken), extra:roundToMinute(extra)};
 }
 
+// Same shape as monthlyTotals, but filtered to a single exact date (YYYY-MM-DD) instead
+// of a month — used for the Home tab's "Today" / "Yesterday" quick views.
+export function dailyTotals(chapters, dateStr) {
+  let taken=0, extra=0;
+  chapters.forEach(c=>{
+    const recomputed = computeLogExtras(c.hourLogs||[], c.totalHours);
+    recomputed.forEach(l=>{
+      if(l.date===dateStr){
+        taken+=l.hours;
+        extra+=l.extraAmount||0;
+      }
+    });
+  });
+  return {taken:roundToMinute(taken), extra:roundToMinute(extra)};
+}
+
 // CSV includes chapter name per row
 export function buildBatchHistoryCSV(batchCode, chapters) {
   const total = chapters.reduce((s,c)=>s+c.totalHours,0);
