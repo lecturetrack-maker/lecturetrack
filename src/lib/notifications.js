@@ -1,4 +1,4 @@
-import { MapPin, Pencil, BarChart3, FileSpreadsheet, Calculator, Smile } from "lucide-react";
+import { MapPin, Pencil, BarChart3, FileSpreadsheet, Calculator, Smile, RefreshCw } from "lucide-react";
 
 // In-app messages shown behind the bell icon on Home.
 // TO ADD A NEW MESSAGE: put a new object at the TOP of this list with a NEW unique `id`.
@@ -9,6 +9,15 @@ import { MapPin, Pencil, BarChart3, FileSpreadsheet, Calculator, Smile } from "l
 //   text  – one-line summary
 //   items – optional list of {Icon, title, text} shown when the message is opened
 export const NOTIFICATIONS = [
+  {
+    id: "completed-sync-v3",
+    date: "17 Oct 2026",
+    title: "Completed batches now sync",
+    text: "When you mark a batch Completed or Running, it now updates on all your devices (phone, tablet, laptop).",
+    items: [
+      { Icon: RefreshCw, title: "Same batches everywhere", text: "Marking a batch as Completed or Running on one device now shows on every device you use. Batches you had already marked completed on your phone are moved over automatically." },
+    ],
+  },
   {
     id: "centre-edit-reports-v2",
     date: "17 Oct 2026",
