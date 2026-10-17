@@ -1,17 +1,17 @@
 import { useState } from "react";
-import { ArrowLeft, Share2, Download, Clock, CheckCircle2, Hourglass, Trash2 } from "lucide-react";
+import { ArrowLeft, Share2, Download, Clock, CheckCircle2, Hourglass, Trash2, Pencil, MapPin } from "lucide-react";
 import CircularProgress from "../components/CircularProgress";
 import BatchHistorySection from "../components/BatchHistorySection";
 import BatchChapterCard from "../components/BatchChapterCard";
-import { fmtHours, getStatus, STATUS, shadeColor, buildBatchHistoryCSV, todayStr } from "../lib/helpers";
+import { fmtHours, batchTotals, getStatus, STATUS, shadeColor, buildBatchHistoryCSV, todayStr } from "../lib/helpers";
 import { shareBatchImage } from "../lib/shareImages";
 
 // Accepts `completed` + `onToggleCompleted` and renders a "Mark Completed" button
 // beside "Delete This Entire Batch" — both buttons are equal size (flex:1 in a row)
-export default function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapter,onEditChapter,onOpenChapter,onDeleteBatch,completed,onToggleCompleted}) {
+export default function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapter,onEditChapter,onOpenChapter,onDeleteBatch,completed,onToggleCompleted,onEditBatch}) {
   const total=chapters.reduce((s,c)=>s+c.totalHours,0);
   const done=chapters.reduce((s,c)=>s+c.completedHours,0);
-  const remaining=Math.max(0,total-done);
+  const remaining=batchTotals(chapters).remaining;
   const pct=total>0?(done/total)*100:0;
   const status=getStatus(done,total);
   const [sharing,setSharing]=useState(false);
@@ -22,6 +22,7 @@ export default function BatchPage({batchCode,color,chapters,masterChapters,onBac
   const teacherName=chapters.find(c=>c.batchTeacher)?.batchTeacher;
   // Batch category selected at creation
   const batchCategory=chapters.find(c=>c.batchCategory)?.batchCategory;
+  const batchCentre=chapters.find(c=>c.batchCentre)?.batchCentre;
 
   const downloadCSV=()=>{
     const csv=buildBatchHistoryCSV(batchCode,chapters);
@@ -43,6 +44,7 @@ export default function BatchPage({batchCode,color,chapters,masterChapters,onBac
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <button onClick={onBack} style={{background:"rgba(255,255,255,.14)",border:"none",borderRadius:12,padding:"8px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,display:"flex",alignItems:"center",gap:6}}><ArrowLeft size={15}/> Back</button>
           <div style={{display:"flex",gap:8}}>
+            <button onClick={onEditBatch} style={{background:"rgba(255,255,255,.14)",border:"none",borderRadius:12,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,display:"flex",alignItems:"center",gap:6}}><Pencil size={14}/> Edit</button>
             <button onClick={shareImage} disabled={sharing} style={{background:"rgba(255,255,255,.14)",border:"none",borderRadius:12,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:sharing?"default":"pointer",fontFamily:"inherit",fontSize:13,opacity:sharing?.7:1,display:"flex",alignItems:"center",gap:6}}><Share2 size={14}/> {sharing?"…":"Share"}</button>
             <button onClick={downloadCSV} style={{background:"rgba(255,255,255,.14)",border:"none",borderRadius:12,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13,display:"flex",alignItems:"center",gap:6}}><Download size={14}/> CSV</button>
           </div>
@@ -53,6 +55,7 @@ export default function BatchPage({batchCode,color,chapters,masterChapters,onBac
               <div style={{fontSize:42,fontWeight:900,letterSpacing:"-1px"}}>{batchCode}</div>
               {completed&&<span style={{fontSize:11,fontWeight:800,padding:"5px 12px",borderRadius:99,background:"rgba(255,255,255,.22)",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5}}><CheckCircle2 size={12}/> Completed</span>}
               {batchCategory&&<span style={{fontSize:11,fontWeight:800,padding:"5px 12px",borderRadius:99,background:"rgba(255,255,255,.22)",whiteSpace:"nowrap"}}>{batchCategory}</span>}
+              {batchCentre&&<span style={{fontSize:11,fontWeight:800,padding:"5px 12px",borderRadius:99,background:"rgba(255,255,255,.22)",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}><MapPin size={11}/> {batchCentre}</span>}
             </div>
             <div style={{fontSize:13,opacity:.75,marginTop:4}}>{chapters.length} chapter{chapters.length===1?"":"s"}{teacherName?` · Teacher: ${teacherName}`:""}</div>
           </div>
