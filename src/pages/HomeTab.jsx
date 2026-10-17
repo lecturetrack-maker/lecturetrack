@@ -176,7 +176,7 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
                         </div>
                         <div>
                           <div style={{fontSize:14,fontWeight:800,color:"#0f172a"}}>{cat}</div>
-                          <div style={{fontSize:11,color:"#94a3b8",fontWeight:600}}>{count} batch{count===1?"":"es"}</div>
+                          <div style={{fontSize:11,color:"#94a3b8",fontWeight:600}}>{count} batch{count===1?"":"es"}{cat==="No Centre"?" · open a batch › Edit to set its centre":""}</div>
                         </div>
                       </div>
                       {open?<ChevronUp size={22} color="#64748b" strokeWidth={3}/>:<ChevronRight size={22} color="#64748b" strokeWidth={3}/>}
