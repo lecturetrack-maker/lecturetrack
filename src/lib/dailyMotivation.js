@@ -3,22 +3,24 @@
 
 const QUOTES = [
   "Every class you teach plants a seed.",
+  "You inspire more minds than you know.",
+  "Great teachers light the way for others.",
   "Small steps daily, big results soon.",
-  "You shape futures, one hour at a time.",
-  "Great teachers make hard things simple.",
+  "Your words can change a student's future.",
   "Consistency beats intensity. Keep going!",
   "One more lecture, one more mind lit up.",
-  "Progress, not perfection.",
   "Teach with heart, the rest follows.",
   "Today's effort is tomorrow's pride.",
-  "You make physics feel possible.",
   "Showing up is half the victory.",
   "Your patience changes lives.",
-  "A good lesson today, a topper tomorrow.",
+  "You make hard things feel possible.",
+  "A good lesson today, a proud student tomorrow.",
   "Your students notice your effort.",
+  "Believe in them, and they will rise.",
+  "You are building futures, one hour at a time.",
 ];
 
-const EMOJIS = ["😊", "😄", "🙂", "😁", "🤗", "😃", "😌","😇"];
+const EMOJIS = ["😊", "😄", "🙂", "😁", "🤗", "😃", "😌"];
 
 // Tile colours, chosen so the tile always contrasts with the banner theme (0 indigo, 1 teal, 2 rose/orange)
 const TILE_COLORS = [
