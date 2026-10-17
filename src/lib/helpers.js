@@ -59,6 +59,37 @@ export function computeLogExtras(hourLogs, totalHours) {
   return withIdx.map(({_idx,...rest})=>rest);
 }
 
+// Elapsed-time text "H:MM" that NEVER wraps at 24h (214h 50m -> "214:50").
+// Used in the Excel report so every viewer (Excel, Numbers, iPhone preview) shows the same value.
+export function fmtHM(hours) {
+  const m = Math.round(Math.abs(hours || 0) * 60);
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+}
+
+// ONE source of truth for allotted / taken / extra / remaining across any set of chapters.
+// Remaining and progress are computed chapter-by-chapter, so extra hours in one chapter
+// can never "use up" the remaining hours of another chapter.
+//   allotted  = sum of allotted hours
+//   taken     = all hours taught (includes extra)
+//   extra     = hours beyond allotted (per chapter)
+//   remaining = hours still to teach (per chapter, never negative)
+//   within    = taken - extra  (hours that count against the allotment)
+//   Always true: allotted - remaining = within
+export function batchTotals(chapters) {
+  let allotted = 0, taken = 0, extra = 0, remaining = 0;
+  (chapters || []).forEach(c => {
+    const t = c.totalHours || 0, d = c.completedHours || 0;
+    allotted += t; taken += d;
+    extra += deriveExtraHours(d, t);
+    remaining += Math.max(0, roundToMinute(t - d));
+  });
+  allotted = roundToMinute(allotted); taken = roundToMinute(taken);
+  extra = roundToMinute(extra); remaining = roundToMinute(remaining);
+  const within = roundToMinute(taken - extra);
+  const pct = allotted > 0 ? (within / allotted) * 100 : 0;
+  return { allotted, taken, extra, remaining, within, pct };
+}
+
 export function getStatus(completed,total) {
   if (!total) return "none";
   const p=(completed/total)*100;
