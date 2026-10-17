@@ -1,11 +1,15 @@
-import { FolderOpen, Plus, Inbox, Trash2, CheckCircle2, ChevronRight } from "lucide-react";
+import { FolderOpen, Plus, Inbox, Trash2, CheckCircle2, ChevronRight, MapPin } from "lucide-react";
 import PBar from "../components/PBar";
 import { BATCH_COLORS } from "../lib/constants";
 import { fmtHours } from "../lib/helpers";
+import { batchInfoMap } from "../lib/analytics";
 
 // Shows a "Completed" tag on batches that have been marked completed
 export default function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatch,completedBatches=[]}) {
   const batches=[...new Set(chapters.filter(c=>c.batchCode).map(c=>c.batchCode))].sort();
+  const info=batchInfoMap(chapters);
+  // Group batches by the year they were added (newest year first). Colours stay tied to the overall sorted order.
+  const years=[...new Set(batches.map(b=>info[b].year))].sort((a,b)=>b-a);
   return(
     <div style={{padding:"20px 16px 20px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
@@ -13,8 +17,18 @@ export default function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatc
         <button onClick={onAddBatch} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"10px 18px",fontWeight:800,cursor:"pointer",fontFamily:"inherit",fontSize:14,boxShadow:"0 4px 14px rgba(99,102,241,.35)",display:"flex",alignItems:"center",gap:6}}><Plus size={15}/> Add Batch</button>
       </div>
       {batches.length===0&&<div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}><div style={{display:"flex",justifyContent:"center"}}><Inbox size={40} strokeWidth={1.5}/></div><div style={{fontWeight:700,marginTop:12,fontSize:16}}>No batches yet</div><div style={{fontSize:13,marginTop:4}}>Tap + Add Batch to get started</div></div>}
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        {batches.map((b,i)=>{
+      {years.map(yr=>{
+        const inYear=batches.filter(b=>info[b].year===yr);
+        return(
+          <div key={yr} style={{marginBottom:22}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+              <div style={{fontSize:15,fontWeight:900,color:"#4338ca",background:"#eef2ff",borderRadius:99,padding:"5px 14px"}}>{yr}</div>
+              <div style={{flex:1,height:1,background:"#e2e8f0"}}/>
+              <div style={{fontSize:12,fontWeight:700,color:"#94a3b8"}}>{inYear.length} batch{inYear.length===1?"":"es"}</div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {batches.filter(b=>info[b].year===yr).map(b=>{
+          const i=batches.indexOf(b);
           const bc=BATCH_COLORS[i%BATCH_COLORS.length];
           const chs=chapters.filter(c=>c.batchCode===b);
           const done=chs.reduce((s,c)=>s+c.completedHours,0);
@@ -32,7 +46,8 @@ export default function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatc
                 </div>
                 <button onClick={e=>{e.stopPropagation();onDeleteBatch(b);}} style={{background:"rgba(239,68,68,.3)",border:"none",borderRadius:10,padding:"7px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12,display:"flex",alignItems:"center",gap:5}}><Trash2 size={13}/> Delete</button>
               </div>
-              <div style={{fontSize:13,opacity:.8,marginBottom:14}}>{chs.length} chapters</div>
+              <div style={{fontSize:13,opacity:.8,marginBottom:info[b].centre?8:14}}>{chs.length} chapters</div>
+              {info[b].centre&&<div style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:12,fontWeight:700,padding:"4px 10px",borderRadius:99,background:"rgba(255,255,255,.2)",marginBottom:14}}><MapPin size={12}/> {info[b].centre}</div>}
               <div style={{display:"flex",gap:10,marginBottom:12}}>
                 {[{l:"Allotted",v:fmtHours(total)},{l:"Done",v:fmtHours(done)},{l:"Left",v:fmtHours(Math.max(0,total-done))}].map(s=>(
                   <div key={s.l} style={{flex:1,background:"rgba(255,255,255,.18)",borderRadius:12,padding:"10px 4px",textAlign:"center"}}>
@@ -46,7 +61,10 @@ export default function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatc
             </div>
           );
         })}
-      </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
