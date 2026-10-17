@@ -48,6 +48,7 @@ export default function App() {
   const [syncStatus,setSyncStatus]=useState(null);
   const [tab,setTab]=useState("home");
   const [addBatchOpen,setAddBatchOpen]=useState(false);
+  const [editBatchOpen,setEditBatchOpen]=useState(false);
   const [addMasterOpen,setAddMasterOpen]=useState(false);
   const [editMaster,setEditMaster]=useState(null);
   const [editChapter,setEditChapter]=useState(null);
@@ -340,6 +341,41 @@ export default function App() {
     }
   };
 
+  // Edit a batch: renames the code and/or changes centre, teacher, category on EVERY chapter in it
+  const editBatch=async({batchCode,teacherName,batchCentre,batchCategory})=>{
+    const oldCode=batchViewRef.current;
+    if(!oldCode) return;
+    if(batchCode!==oldCode && chapters.some(c=>c.batchCode===batchCode)){
+      alert(`A batch named "${batchCode}" already exists. Please choose a different name.`);
+      return;
+    }
+    const updatedList=chapters.filter(c=>c.batchCode===oldCode).map(c=>({...c,batchCode,batchTeacher:teacherName||null,batchCentre:batchCentre||null,batchCategory:batchCategory||null}));
+    const byId=new Map(updatedList.map(c=>[c.id,c]));
+    setChapters(prev=>prev.map(c=>byId.get(c.id)||c));
+    if(batchCode!==oldCode){
+      setBatchView(batchCode);
+      setCompletedBatches(prev=>{
+        const next=prev.map(b=>b===oldCode?batchCode:b);
+        try{if(profile) localStorage.setItem(`lt_completed_${profile.code}`,JSON.stringify(next));}catch{}
+        return next;
+      });
+    }
+    setSyncStatus("saving");
+    let hadError=false;
+    for(const c of updatedList){
+      const {error}=await supabase.from("chapters").upsert(toRow(profile.code,c),{onConflict:"id"});
+      if(error) hadError=true;
+      // toRow only writes batch_centre when it has a value, so clear it explicitly if removed
+      if(!batchCentre){
+        const {error:e2}=await supabase.from("chapters").update({batch_centre:null}).eq("id",c.id);
+        if(e2) console.error("clear batch_centre failed:",e2.message);
+      }
+    }
+    setSyncStatus(hadError?"error":"saved");
+    setTimeout(()=>setSyncStatus(null),2500);
+    setEditBatchOpen(false);
+  };
+
   const editBatchChapterSave=async data=>{
     const updated={...editChapter,...data};
     setChapters(prev=>prev.map(c=>c.id===updated.id?updated:c));
@@ -403,7 +439,12 @@ export default function App() {
         onEditChapter={c=>setEditChapter(c)} onOpenChapter={openDetail}
         onDeleteBatch={()=>deleteBatch(batchView)}
         completed={completedBatches.includes(batchView)}
-        onToggleCompleted={()=>toggleBatchCompleted(batchView)}/>
+        onToggleCompleted={()=>toggleBatchCompleted(batchView)}
+        onEditBatch={()=>setEditBatchOpen(true)}/>
+      {editBatchOpen&&(
+        <BatchFormModal initial={{batchCode:batchView,teacherName:bChs.find(c=>c.batchTeacher)?.batchTeacher||"",batchCentre:bChs.find(c=>c.batchCentre)?.batchCentre||"",batchCategory:bChs.find(c=>c.batchCategory)?.batchCategory||""}}
+          onSave={editBatch} onClose={()=>setEditBatchOpen(false)} subject={profile.subject} masterChapters={masterChapters} existingCentres={existingCentres}/>
+      )}
       {editChapter&&(
         <Modal title={<span style={{display:"flex",alignItems:"center",gap:8}}>Edit Chapter</span>} onClose={()=>setEditChapter(null)}>
           <EditChapterForm chapter={editChapter} onSave={editBatchChapterSave} onClose={()=>setEditChapter(null)}/>
