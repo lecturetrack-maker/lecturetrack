@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { FolderOpen, Plus, CheckCircle2 } from "lucide-react";
+import { FolderOpen, Plus, CheckCircle2, MapPin } from "lucide-react";
 import Modal from "./Modal";
 import BatchRowInput from "./BatchRowInput";
 import { BATCH_CATEGORIES, CATEGORY_ICONS } from "../lib/constants";
 import { uid } from "../lib/helpers";
 
 // Added Batch Category selector (Repeaters / Residential / Long Term / Foundation / Tuition / Others)
-export default function BatchFormModal({onSave,onClose,subject,masterChapters}) {
+export default function BatchFormModal({onSave,onClose,subject,masterChapters,existingCentres=[]}) {
   const [batchCode,setBatchCode]=useState("");
   const [teacherName,setTeacherName]=useState("");
+  const [batchCentre,setBatchCentre]=useState(existingCentres.length===1?existingCentres[0]:"");
   const [batchCategory,setBatchCategory]=useState(BATCH_CATEGORIES[0]);
   const [rows,setRows]=useState([{id:uid(),name:"",hours:""}]);
   // Use refs to track current row data without re-rendering the inputs
@@ -47,7 +48,7 @@ export default function BatchFormModal({onSave,onClose,subject,masterChapters}) 
       .map(r => rowDataRef.current[r.id] || {name:"",hours:""})
       .filter(r => r.name.trim() && parseFloat(r.hours)>0);
     if(validRows.length===0) return;
-    onSave({batchCode:batchCode.trim().toUpperCase(), teacherName:teacherName.trim(), batchCategory, rows:validRows});
+    onSave({batchCode:batchCode.trim().toUpperCase(), teacherName:teacherName.trim(), batchCentre:batchCentre.trim(), batchCategory, rows:validRows});
   };
 
   return(
@@ -56,6 +57,21 @@ export default function BatchFormModal({onSave,onClose,subject,masterChapters}) 
         <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Batch Code / Name</label>
         <input value={batchCode} onChange={e=>setBatchCode(e.target.value.toUpperCase())} placeholder="e.g. X1, 11A, RISE"
           style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
+      </div>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"flex",alignItems:"center",gap:5,fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}><MapPin size={13}/> Centre / Branch</label>
+        <input value={batchCentre} onChange={e=>setBatchCentre(e.target.value)} placeholder="e.g. Main Campus, Kukatpally Branch"
+          style={{width:"100%",padding:"12px 14px",border:"2px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",outline:"none",background:"#f8fafc",boxSizing:"border-box"}}/>
+        {existingCentres.length>0&&(
+          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>
+            {existingCentres.map(c=>{
+              const on=batchCentre.trim().toLowerCase()===c.toLowerCase();
+              return(
+                <button key={c} onClick={()=>setBatchCentre(c)} style={{padding:"6px 12px",borderRadius:99,border:`2px solid ${on?"#6366f1":"#e2e8f0"}`,background:on?"#eef2ff":"#f8fafc",fontWeight:700,cursor:"pointer",color:on?"#6366f1":"#64748b",fontFamily:"inherit",fontSize:12}}>{c}</button>
+              );
+            })}
+          </div>
+        )}
       </div>
       <div style={{marginBottom:14}}>
         <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Teacher Name (optional)</label>
