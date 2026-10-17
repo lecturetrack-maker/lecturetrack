@@ -57,8 +57,6 @@ export default function App() {
   const [travelView,setTravelView]=useState(false);
   const congratsShown=useRef(false);
   const [showCongrats,setShowCongrats]=useState(false);
-  // Tracks which batch codes have been marked "Completed" so they can be hidden from the Home tab
-  const [completedBatches,setCompletedBatches]=useState([]);
   const [travelLogs,setTravelLogs]=useState([]);
   // Set when the travel_logs fetch fails (missing table / RLS blocking reads / network),
   // so the Travel page can show the person a real reason instead of a silently-empty list.
@@ -114,25 +112,6 @@ export default function App() {
   const goBackFromTravel=useCallback(()=>{ window.history.back(); },[]);
 
   useEffect(()=>{const t=setTimeout(()=>setSplashDone(true),2200);return()=>clearTimeout(t);},[]);
-
-  // Load the completed-batches list for this teacher from localStorage
-  useEffect(()=>{
-    if(!profile){setCompletedBatches([]);return;}
-    try{
-      const stored=localStorage.getItem(`lt_completed_${profile.code}`);
-      setCompletedBatches(stored?JSON.parse(stored):[]);
-    }catch{setCompletedBatches([]);}
-  },[profile?.code]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Toggle a batch's completed status and persist it
-  const toggleBatchCompleted=useCallback((batchCode)=>{
-    setCompletedBatches(prev=>{
-      const isCompleted=prev.includes(batchCode);
-      const next=isCompleted?prev.filter(b=>b!==batchCode):[...prev,batchCode];
-      try{if(profile) localStorage.setItem(`lt_completed_${profile.code}`,JSON.stringify(next));}catch{}
-      return next;
-    });
-  },[profile]);
 
   useEffect(()=>{
     if(!profile) return;
@@ -258,8 +237,50 @@ export default function App() {
     syncChapter(updated);
   },[syncChapter,profile?.code]);
 
+  // Mark a batch Completed / Running. Saved online on every chapter of the batch.
+  const toggleBatchCompleted=useCallback(async(batchCode)=>{
+    if(!profile) return;
+    const target=chapters.filter(c=>c.batchCode===batchCode);
+    if(target.length===0) return;
+    const makeCompleted=!target.every(c=>c.batchCompleted);
+    const updated=target.map(c=>({...c,batchCompleted:makeCompleted}));
+    const byId=new Map(updated.map(c=>[c.id,c]));
+    setChapters(prev=>prev.map(c=>byId.get(c.id)||c));
+    setSyncStatus("saving");
+    let hadError=false;
+    for(const c of updated){
+      const {error}=await supabase.from("chapters").upsert(toRow(profile.code,c),{onConflict:"id"});
+      if(error) hadError=true;
+    }
+    setSyncStatus(hadError?"error":"saved");
+    setTimeout(()=>setSyncStatus(null),2500);
+  },[profile,chapters]);
+
+  // One-time move of this device's old "completed" list (kept only on the device before)
+  // into the online data, so batches already marked completed stay completed everywhere.
+  const migratedRef=useRef(false);
+  useEffect(()=>{
+    if(!profile||loading||migratedRef.current||chapters.length===0) return;
+    migratedRef.current=true;
+    try{
+      const flag=`lt_completed_migrated_${profile.code}`;
+      if(localStorage.getItem(flag)) return;
+      const stored=JSON.parse(localStorage.getItem(`lt_completed_${profile.code}`)||"[]");
+      if(!Array.isArray(stored)||stored.length===0) return;
+      const toMark=chapters.filter(c=>c.batchCode&&stored.includes(c.batchCode)&&!c.batchCompleted).map(c=>({...c,batchCompleted:true}));
+      localStorage.setItem(flag,"1");
+      if(toMark.length===0) return;
+      const byId=new Map(toMark.map(c=>[c.id,c]));
+      setChapters(prev=>prev.map(c=>byId.get(c.id)||c));
+      toMark.forEach(c=>{ supabase.from("chapters").upsert(toRow(profile.code,c),{onConflict:"id"}); });
+    }catch{}
+  },[profile,loading,chapters]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const masterChapters=useMemo(()=>chapters.filter(c=>!c.batchCode),[chapters]);
   const batchChapters=useMemo(()=>chapters.filter(c=>c.batchCode),[chapters]);
+  // A batch counts as "Completed" when it has been marked so. The flag is saved online on
+  // the batch's chapters, so phone, tablet and every other device always agree.
+  const completedBatches=useMemo(()=>[...new Set(batchChapters.filter(c=>c.batchCompleted).map(c=>c.batchCode))],[batchChapters]);
   const existingCentres=useMemo(()=>[...new Set(batchChapters.map(c=>c.batchCentre).filter(Boolean))].sort(),[batchChapters]);
 
   const addMasterChapter=async({name,topics})=>{
@@ -326,12 +347,6 @@ export default function App() {
     const toDelete=chapters.filter(c=>c.batchCode===batchCode);
     setChapters(prev=>prev.filter(c=>c.batchCode!==batchCode));
     for(const c of toDelete) await supabase.from("chapters").delete().eq("id",c.id);
-    // Also clean up the completed-batches list if this batch was marked completed
-    setCompletedBatches(prev=>{
-      const next=prev.filter(b=>b!==batchCode);
-      try{if(profile) localStorage.setItem(`lt_completed_${profile.code}`,JSON.stringify(next));}catch{}
-      return next;
-    });
     // If we're currently viewing the batch being deleted, consume the history entry
     // that was pushed when it was opened (keeps the back-button stack accurate).
     if(batchViewRef.current===batchCode){
@@ -358,11 +373,6 @@ export default function App() {
     setChapters(prev=>prev.map(c=>byId.get(c.id)||c));
     if(batchCode!==oldCode){
       setBatchView(batchCode);
-      setCompletedBatches(prev=>{
-        const next=prev.map(b=>b===oldCode?batchCode:b);
-        try{if(profile) localStorage.setItem(`lt_completed_${profile.code}`,JSON.stringify(next));}catch{}
-        return next;
-      });
     }
     setSyncStatus("saving");
     let hadError=false;
