@@ -1,16 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { FolderOpen, Plus, CheckCircle2, MapPin } from "lucide-react";
+import { FolderOpen, Plus, CheckCircle2, MapPin, Pencil } from "lucide-react";
 import Modal from "./Modal";
 import BatchRowInput from "./BatchRowInput";
 import { BATCH_CATEGORIES, CATEGORY_ICONS } from "../lib/constants";
 import { uid } from "../lib/helpers";
 
+// Used for both "Add Batch" and "Edit Batch" (pass `initial` to edit: name, centre, teacher, category).
 // Added Batch Category selector (Repeaters / Residential / Long Term / Foundation / Tuition / Others)
-export default function BatchFormModal({onSave,onClose,subject,masterChapters,existingCentres=[]}) {
-  const [batchCode,setBatchCode]=useState("");
-  const [teacherName,setTeacherName]=useState("");
-  const [batchCentre,setBatchCentre]=useState(existingCentres.length===1?existingCentres[0]:"");
-  const [batchCategory,setBatchCategory]=useState(BATCH_CATEGORIES[0]);
+export default function BatchFormModal({onSave,onClose,subject,masterChapters,existingCentres=[],initial=null}) {
+  const editing=!!initial;
+  const [batchCode,setBatchCode]=useState(initial?.batchCode||"");
+  const [teacherName,setTeacherName]=useState(initial?.teacherName||"");
+  const [batchCentre,setBatchCentre]=useState(initial?initial.batchCentre||"":(existingCentres.length===1?existingCentres[0]:""));
+  const [batchCategory,setBatchCategory]=useState(initial?.batchCategory||BATCH_CATEGORIES[0]);
   const [rows,setRows]=useState([{id:uid(),name:"",hours:""}]);
   // Use refs to track current row data without re-rendering the inputs
   const rowDataRef = useRef({});
@@ -44,6 +46,10 @@ export default function BatchFormModal({onSave,onClose,subject,masterChapters,ex
 
   const handleSave = () => {
     if(!batchCode.trim()) return;
+    if(editing){
+      onSave({batchCode:batchCode.trim().toUpperCase(), teacherName:teacherName.trim(), batchCentre:batchCentre.trim(), batchCategory});
+      return;
+    }
     const validRows = rows
       .map(r => rowDataRef.current[r.id] || {name:"",hours:""})
       .filter(r => r.name.trim() && parseFloat(r.hours)>0);
@@ -52,7 +58,7 @@ export default function BatchFormModal({onSave,onClose,subject,masterChapters,ex
   };
 
   return(
-    <Modal title={<span style={{display:"flex",alignItems:"center",gap:8}}><FolderOpen size={17}/> Add Batch</span>} onClose={onClose}>
+    <Modal title={<span style={{display:"flex",alignItems:"center",gap:8}}>{editing?<Pencil size={16}/>:<FolderOpen size={17}/>} {editing?"Edit Batch":"Add Batch"}</span>} onClose={onClose}>
       <div style={{marginBottom:14}}>
         <label style={{display:"block",fontSize:13,fontWeight:700,color:"#475569",marginBottom:5}}>Batch Code / Name</label>
         <input value={batchCode} onChange={e=>setBatchCode(e.target.value.toUpperCase())} placeholder="e.g. X1, 11A, RISE"
@@ -91,8 +97,8 @@ export default function BatchFormModal({onSave,onClose,subject,masterChapters,ex
           })}
         </div>
       </div>
-      <div style={{fontSize:13,fontWeight:700,color:"#475569",marginBottom:8}}>Chapters in this batch:</div>
-      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
+      {!editing&&<div style={{fontSize:13,fontWeight:700,color:"#475569",marginBottom:8}}>Chapters in this batch:</div>}
+      {!editing&&<div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
         {rows.map((row,i)=>(
           <BatchRowInput
             key={row.id}
@@ -108,13 +114,13 @@ export default function BatchFormModal({onSave,onClose,subject,masterChapters,ex
             index={i}
           />
         ))}
-      </div>
-      <button onClick={addRow} style={{width:"100%",padding:"10px",background:"#eef2ff",color:"#6366f1",border:"2px dashed #c7d2fe",borderRadius:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14,marginBottom:16}}>
+      </div>}
+      {!editing&&<button onClick={addRow} style={{width:"100%",padding:"10px",background:"#eef2ff",color:"#6366f1",border:"2px dashed #c7d2fe",borderRadius:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:14,marginBottom:16}}>
         <span style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Plus size={15}/> Add Another Chapter</span>
-      </button>
+      </button>}
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
-        <button onClick={handleSave} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(99,102,241,.3)"}}><span style={{display:"flex",alignItems:"center",gap:6}}><CheckCircle2 size={15}/> Create Batch</span></button>
+        <button onClick={handleSave} style={{background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:12,padding:"11px 22px",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(99,102,241,.3)"}}><span style={{display:"flex",alignItems:"center",gap:6}}><CheckCircle2 size={15}/> {editing?"Save Changes":"Create Batch"}</span></button>
       </div>
     </Modal>
   );
