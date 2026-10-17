@@ -259,6 +259,7 @@ export default function App() {
 
   const masterChapters=useMemo(()=>chapters.filter(c=>!c.batchCode),[chapters]);
   const batchChapters=useMemo(()=>chapters.filter(c=>c.batchCode),[chapters]);
+  const existingCentres=useMemo(()=>[...new Set(batchChapters.map(c=>c.batchCentre).filter(Boolean))].sort(),[batchChapters]);
 
   const addMasterChapter=async({name,topics})=>{
     const exists=masterChapters.find(mc=>mc.name.toLowerCase()===name.toLowerCase());
@@ -292,13 +293,13 @@ export default function App() {
   };
 
   // addBatch copies topics from master chapters, and stores batchCategory
-  const addBatch=async({batchCode,teacherName,batchCategory,rows})=>{
+  const addBatch=async({batchCode,teacherName,batchCategory,batchCentre,rows})=>{
     const newChapters=[];
     for(const row of rows){
       const master=masterChapters.find(mc=>mc.name.toLowerCase()===row.name.trim().toLowerCase());
       // Copy topics from master, resetting done state
       const topics=master?master.topics.map(t=>({...t,id:uid(),done:false})):[];
-      const nc={id:uid(),name:row.name.trim(),batchCode,totalHours:parseFloat(row.hours),completedHours:0,extraHours:0,topics,notes:"",lastCompletedTopic:null,hourLogs:[],batchTeacher:teacherName||null,batchCategory:batchCategory||null};
+      const nc={id:uid(),name:row.name.trim(),batchCode,totalHours:parseFloat(row.hours),completedHours:0,extraHours:0,topics,notes:"",lastCompletedTopic:null,hourLogs:[],batchTeacher:teacherName||null,batchCategory:batchCategory||null,batchCentre:batchCentre||null,createdAt:new Date().toISOString()};
       newChapters.push(nc);
     }
     setChapters(prev=>[...prev,...newChapters]);
@@ -441,7 +442,7 @@ export default function App() {
       )}
     </div>
     <BottomNav active={tab} onChange={t=>setTab(t)}/>
-    {addBatchOpen&&<BatchFormModal onSave={addBatch} onClose={()=>setAddBatchOpen(false)} subject={profile.subject} masterChapters={masterChapters}/>}
+    {addBatchOpen&&<BatchFormModal onSave={addBatch} onClose={()=>setAddBatchOpen(false)} subject={profile.subject} masterChapters={masterChapters} existingCentres={existingCentres}/>}
     {addMasterOpen&&<AddChapterMasterModal onSave={addMasterChapter} onClose={()=>setAddMasterOpen(false)} subject={profile.subject}/>}
     {editMaster&&<ChapterMasterModal chapter={editMaster} onSave={saveMasterTopics} onClose={()=>setEditMaster(null)}/>}
     {/* "What's New" popup — announces new features, dismissible per-teacher */}
