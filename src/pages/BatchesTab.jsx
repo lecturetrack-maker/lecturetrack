@@ -1,7 +1,7 @@
 import { FolderOpen, Plus, Inbox, Trash2, CheckCircle2, ChevronRight, MapPin } from "lucide-react";
 import PBar from "../components/PBar";
 import { BATCH_COLORS } from "../lib/constants";
-import { fmtHours } from "../lib/helpers";
+import { fmtHours, batchTotals } from "../lib/helpers";
 import { batchInfoMap } from "../lib/analytics";
 
 // Shows a "Completed" tag on batches that have been marked completed
@@ -49,7 +49,7 @@ export default function BatchesTab({chapters,onOpenBatch,onDeleteBatch,onAddBatc
               <div style={{fontSize:13,opacity:.8,marginBottom:info[b].centre?8:14}}>{chs.length} chapters</div>
               {info[b].centre&&<div style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:12,fontWeight:700,padding:"4px 10px",borderRadius:99,background:"rgba(255,255,255,.2)",marginBottom:14}}><MapPin size={12}/> {info[b].centre}</div>}
               <div style={{display:"flex",gap:10,marginBottom:12}}>
-                {[{l:"Allotted",v:fmtHours(total)},{l:"Done",v:fmtHours(done)},{l:"Left",v:fmtHours(Math.max(0,total-done))}].map(s=>(
+                {[{l:"Allotted",v:fmtHours(total)},{l:"Done",v:fmtHours(done)},{l:"Left",v:fmtHours(batchTotals(chs).remaining)}].map(s=>(
                   <div key={s.l} style={{flex:1,background:"rgba(255,255,255,.18)",borderRadius:12,padding:"10px 4px",textAlign:"center"}}>
                     <div style={{fontSize:14,fontWeight:800}}>{s.v}</div>
                     <div style={{fontSize:9,opacity:.8,fontWeight:600,marginTop:1}}>{s.l}</div>
