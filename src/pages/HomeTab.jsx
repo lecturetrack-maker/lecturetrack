@@ -1,10 +1,12 @@
 import { useState, useMemo } from "react";
-import { Bell, User as UserIcon, FolderOpen, Plus, Clock, ClipboardList, Star, BarChart3, ChevronUp, ChevronRight, Inbox, PartyPopper, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Bell, User as UserIcon, FolderOpen, Plus, Clock, Star, BarChart3, ChevronUp, ChevronRight, Inbox, PartyPopper, CheckCircle2, AlertTriangle, MapPin } from "lucide-react";
 import SubjectIcon from "../components/SubjectIcon";
 import SyncBadge from "../components/SyncBadge";
 import PBar from "../components/PBar";
-import { BATCH_COLORS, BATCH_CATEGORIES, CATEGORY_ICONS } from "../lib/constants";
-import { fmtHours, todayStr, collectBatchLogs, monthKey, monthLabel, monthlyTotals, dailyTotals } from "../lib/helpers";
+import { BATCH_COLORS } from "../lib/constants";
+import { fmtHours, todayStr, collectBatchLogs, monthKey, monthLabel, monthlyTotals, dailyTotals, batchTotals } from "../lib/helpers";
+import { batchInfoMap } from "../lib/analytics";
+import { getDailyMotivation } from "../lib/dailyMotivation";
 
 // 3 color themes for the "This Month" hero card — App.jsx picks one at random
 // each time the app is freshly opened (not on every tab switch) and passes it
@@ -19,9 +21,9 @@ const BANNER_THEMES=[
 // so the batch list on the front page only shows running batches.
 export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProfile,completedBatches=[],onAddBatch,bannerTheme=0}) {
   const batchChapters=chapters.filter(c=>c.batchCode);
-  const totalAllotted=batchChapters.reduce((s,c)=>s+c.totalHours,0);
-  const totalDoneAllTime=batchChapters.reduce((s,c)=>s+c.completedHours,0);
-  const pctAllTime=totalAllotted>0?(totalDoneAllTime/totalAllotted)*100:0;
+  // Overall progress counts only hours that fall inside the allotment (extra hours never inflate it)
+  const pctAllTime=batchTotals(batchChapters).pct;
+  const motivation=getDailyMotivation(bannerTheme);
   const hr=new Date().getHours();
   const gw=hr<12?"Good Morning":hr<17?"Good Afternoon":"Good Evening";
   const wave=hr<12?"☀️":hr<17?"🌤️":"🌙";
@@ -29,23 +31,27 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
   // Only show currently running (not completed) batches on the front page
   const batches=allBatches.filter(b=>!completedBatches.includes(b));
 
-  // Group the running batches by category (falls back to "Others" for batches
-  // created before categories existed, or that never got one)
+  // Group the running batches by CENTRE (branch), then by YEAR the batch was added (newest first).
+  // Batches with no centre fall under "No Centre".
   const [expandedCats,setExpandedCats]=useState({});
+  const info=useMemo(()=>batchInfoMap(batchChapters),[batchChapters]);
   const categorized=useMemo(()=>{
     const map={};
     batches.forEach(b=>{
-      const chs=batchChapters.filter(c=>c.batchCode===b);
-      const cat=chs.find(c=>c.batchCategory)?.batchCategory || "Others";
-      if(!map[cat]) map[cat]=[];
-      map[cat].push(b);
+      const centre=info[b]?.centre||"No Centre";
+      const year=info[b]?.year||new Date().getFullYear();
+      if(!map[centre]) map[centre]={};
+      if(!map[centre][year]) map[centre][year]=[];
+      map[centre][year].push(b);
     });
-    // Keep a stable, sensible order: known categories first (in BATCH_CATEGORIES order), then anything else
-    const ordered=[];
-    BATCH_CATEGORIES.forEach(cat=>{ if(map[cat]) ordered.push([cat,map[cat]]); });
-    Object.keys(map).forEach(cat=>{ if(!BATCH_CATEGORIES.includes(cat)) ordered.push([cat,map[cat]]); });
-    return ordered;
-  },[batches,batchChapters]);
+    return Object.keys(map)
+      .sort((a,b)=>a==="No Centre"?1:b==="No Centre"?-1:a.localeCompare(b))
+      .map(centre=>({
+        centre,
+        count:Object.values(map[centre]).reduce((s,arr)=>s+arr.length,0),
+        years:Object.keys(map[centre]).map(Number).sort((a,b)=>b-a).map(y=>({year:y,batches:map[centre][y]})),
+      }));
+  },[batches,info]);
   const toggleCat=cat=>setExpandedCats(prev=>({...prev,[cat]:!prev[cat]}));
 
   // Monthly hours-taken view — data already existed per chapter (hourLogs), just aggregated here
@@ -121,18 +127,26 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
           </div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-          {[
-            {label:"Hours Taken",val:fmtHours(periodTaken),Icon:Clock},
-            {label:"Allotted (Total)",val:fmtHours(totalAllotted),Icon:ClipboardList},
-            {label:"Extra Hours",val:fmtHours(periodExtra),Icon:Star},
-            {label:"Overall Progress",val:pctAllTime.toFixed(0)+"%",Icon:BarChart3},
-          ].map(s=>(
-            <div key={s.label} style={{background:"rgba(255,255,255,.15)",borderRadius:16,padding:"12px 14px"}}>
-              <div style={{marginBottom:4}}><s.Icon size={17} color="#fff" strokeWidth={2.2}/></div>
-              <div style={{fontSize:17,fontWeight:900}}>{s.val}</div>
-              <div style={{fontSize:10,opacity:.75,fontWeight:600,marginTop:2}}>{s.label}</div>
-            </div>
-          ))}
+          <div style={{background:"rgba(255,255,255,.15)",borderRadius:16,padding:"12px 14px"}}>
+            <div style={{marginBottom:4}}><Clock size={17} color="#fff" strokeWidth={2.2}/></div>
+            <div style={{fontSize:17,fontWeight:900}}>{fmtHours(periodTaken)}</div>
+            <div style={{fontSize:10,opacity:.75,fontWeight:600,marginTop:2}}>Hours Taken</div>
+          </div>
+          {/* Daily motivation: quote + emoji change every day, tile has its own colour */}
+          <div style={{background:motivation.background,borderRadius:16,padding:"12px 14px",display:"flex",flexDirection:"column",justifyContent:"center",boxShadow:"0 4px 14px rgba(0,0,0,.18)"}}>
+            <div style={{fontSize:20,lineHeight:1,marginBottom:6}}>{motivation.emoji}</div>
+            <div style={{fontSize:11.5,fontWeight:800,lineHeight:1.35}}>{motivation.quote}</div>
+          </div>
+          <div style={{background:"rgba(255,255,255,.15)",borderRadius:16,padding:"12px 14px"}}>
+            <div style={{marginBottom:4}}><Star size={17} color="#fff" strokeWidth={2.2}/></div>
+            <div style={{fontSize:17,fontWeight:900}}>{fmtHours(periodExtra)}</div>
+            <div style={{fontSize:10,opacity:.75,fontWeight:600,marginTop:2}}>Extra Hours</div>
+          </div>
+          <div style={{background:"rgba(255,255,255,.15)",borderRadius:16,padding:"12px 14px"}}>
+            <div style={{marginBottom:4}}><BarChart3 size={17} color="#fff" strokeWidth={2.2}/></div>
+            <div style={{fontSize:17,fontWeight:900}}>{pctAllTime.toFixed(0)}%</div>
+            <div style={{fontSize:10,opacity:.75,fontWeight:600,marginTop:2}}>Overall Progress</div>
+          </div>
         </div>
         <PBar pct={pctAllTime}/>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,opacity:.8,fontWeight:600}}>
@@ -150,9 +164,9 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
 
           {categorized.length>0&&(
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {categorized.map(([cat,catBatches])=>{
+              {categorized.map(({centre:cat,count,years})=>{
                 const open=!!expandedCats[cat];
-                const CatIcon=CATEGORY_ICONS[cat]||FolderOpen;
+                const CatIcon=cat==="No Centre"?FolderOpen:MapPin;
                 return(
                   <div key={cat} style={{background:"#fff",borderRadius:16,boxShadow:"0 1px 8px rgba(0,0,0,.06)",overflow:"hidden"}}>
                     <div onClick={()=>toggleCat(cat)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",cursor:"pointer"}}>
@@ -162,14 +176,20 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
                         </div>
                         <div>
                           <div style={{fontSize:14,fontWeight:800,color:"#0f172a"}}>{cat}</div>
-                          <div style={{fontSize:11,color:"#94a3b8",fontWeight:600}}>{catBatches.length} batch{catBatches.length===1?"":"es"}</div>
+                          <div style={{fontSize:11,color:"#94a3b8",fontWeight:600}}>{count} batch{count===1?"":"es"}</div>
                         </div>
                       </div>
                       {open?<ChevronUp size={22} color="#64748b" strokeWidth={3}/>:<ChevronRight size={22} color="#64748b" strokeWidth={3}/>}
                     </div>
                     {open&&(
                       <div style={{padding:"0 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
-                        {catBatches.map(b=>{
+                        {years.map(({year,batches:yearBatches})=>(
+                          <div key={year} style={{display:"flex",flexDirection:"column",gap:8}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,marginTop:4}}>
+                              <span style={{fontSize:12,fontWeight:900,color:"#4338ca",background:"#eef2ff",borderRadius:99,padding:"3px 12px"}}>{year}</span>
+                              <div style={{flex:1,height:1,background:"#e2e8f0"}}/>
+                            </div>
+                        {yearBatches.map(b=>{
                           const bc=BATCH_COLORS[allBatches.indexOf(b)%BATCH_COLORS.length];
                           const chs=batchChapters.filter(c=>c.batchCode===b);
                           const done=chs.reduce((s,c)=>s+c.completedHours,0);
@@ -204,6 +224,8 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
                             </div>
                           );
                         })}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
