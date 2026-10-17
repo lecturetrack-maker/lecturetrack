@@ -342,14 +342,18 @@ export default function App() {
   };
 
   // Edit a batch: renames the code and/or changes centre, teacher, category on EVERY chapter in it
-  const editBatch=async({batchCode,teacherName,batchCentre,batchCategory})=>{
+  const editBatch=async({batchCode,teacherName,batchCentre,batchCategory,chapters:chEdits=[]})=>{
     const oldCode=batchViewRef.current;
     if(!oldCode) return;
     if(batchCode!==oldCode && chapters.some(c=>c.batchCode===batchCode)){
       alert(`A batch named "${batchCode}" already exists. Please choose a different name.`);
       return;
     }
-    const updatedList=chapters.filter(c=>c.batchCode===oldCode).map(c=>({...c,batchCode,batchTeacher:teacherName||null,batchCentre:batchCentre||null,batchCategory:batchCategory||null}));
+    const edits=new Map(chEdits.map(e=>[e.id,e]));
+    const updatedList=chapters.filter(c=>c.batchCode===oldCode).map(c=>{
+      const e=edits.get(c.id);
+      return {...c,...(e?{name:e.name,totalHours:e.totalHours}:{}),batchCode,batchTeacher:teacherName||null,batchCentre:batchCentre||null,batchCategory:batchCategory||null};
+    });
     const byId=new Map(updatedList.map(c=>[c.id,c]));
     setChapters(prev=>prev.map(c=>byId.get(c.id)||c));
     if(batchCode!==oldCode){
@@ -442,7 +446,7 @@ export default function App() {
         onToggleCompleted={()=>toggleBatchCompleted(batchView)}
         onEditBatch={()=>setEditBatchOpen(true)}/>
       {editBatchOpen&&(
-        <BatchFormModal initial={{batchCode:batchView,teacherName:bChs.find(c=>c.batchTeacher)?.batchTeacher||"",batchCentre:bChs.find(c=>c.batchCentre)?.batchCentre||"",batchCategory:bChs.find(c=>c.batchCategory)?.batchCategory||""}}
+        <BatchFormModal initial={{batchCode:batchView,teacherName:bChs.find(c=>c.batchTeacher)?.batchTeacher||"",batchCentre:bChs.find(c=>c.batchCentre)?.batchCentre||"",batchCategory:bChs.find(c=>c.batchCategory)?.batchCategory||"",chapters:bChs.map(c=>({id:c.id,name:c.name,totalHours:c.totalHours,completedHours:c.completedHours}))}}
           onSave={editBatch} onClose={()=>setEditBatchOpen(false)} subject={profile.subject} masterChapters={masterChapters} existingCentres={existingCentres}/>
       )}
       {editChapter&&(
