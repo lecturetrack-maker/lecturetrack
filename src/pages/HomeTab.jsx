@@ -7,6 +7,8 @@ import { BATCH_COLORS } from "../lib/constants";
 import { fmtHours, todayStr, collectBatchLogs, monthKey, monthLabel, monthlyTotals, dailyTotals, batchTotals } from "../lib/helpers";
 import { batchInfoMap } from "../lib/analytics";
 import { getDailyMotivation } from "../lib/dailyMotivation";
+import { NOTIFICATIONS, loadReadIds, saveReadIds } from "../lib/notifications";
+import NotificationsPanel from "../components/NotificationsPanel";
 
 // 3 color themes for the "This Month" hero card — App.jsx picks one at random
 // each time the app is freshly opened (not on every tab switch) and passes it
@@ -24,6 +26,13 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
   // Overall progress counts only hours that fall inside the allotment (extra hours never inflate it)
   const pctAllTime=batchTotals(batchChapters).pct;
   const motivation=getDailyMotivation(bannerTheme);
+
+  // Bell notifications: unread count shown as a small red badge
+  const [notifOpen,setNotifOpen]=useState(false);
+  const [readIds,setReadIds]=useState(()=>loadReadIds(profile.code));
+  const unreadCount=NOTIFICATIONS.filter(n=>!readIds.includes(n.id)).length;
+  const markRead=id=>setReadIds(prev=>{ if(prev.includes(id)) return prev; const next=[...prev,id]; saveReadIds(profile.code,next); return next; });
+  const markAllRead=()=>setReadIds(()=>{ const next=NOTIFICATIONS.map(n=>n.id); saveReadIds(profile.code,next); return next; });
   const hr=new Date().getHours();
   const gw=hr<12?"Good Morning":hr<17?"Good Afternoon":"Good Evening";
   const wave=hr<12?"☀️":hr<17?"🌤️":"🌙";
@@ -95,8 +104,9 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             {syncStatus&&<SyncBadge status={syncStatus}/>}
-            <button style={{width:38,height:38,borderRadius:"50%",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",border:"1.5px solid #e2e8f0",flexShrink:0,cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
+            <button onClick={()=>setNotifOpen(true)} aria-label="Notifications" style={{position:"relative",width:38,height:38,borderRadius:"50%",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",border:"1.5px solid #e2e8f0",flexShrink:0,cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
               <Bell size={17} color="#4338ca" strokeWidth={2}/>
+              {unreadCount>0&&<span style={{position:"absolute",top:-4,right:-4,minWidth:17,height:17,padding:"0 4px",borderRadius:99,background:"#ef4444",color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #f8fafc",boxSizing:"content-box",lineHeight:1}}>{unreadCount>9?"9+":unreadCount}</span>}
             </button>
             <button onClick={onGoProfile} style={{width:38,height:38,borderRadius:"50%",background:"#eef2ff",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",border:"2px solid #e0e7ff",flexShrink:0,cursor:"pointer",padding:0}}>
               {profile.photo?<img src={profile.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<UserIcon size={17} color="#6366f1"/>}
@@ -261,6 +271,7 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
           </div>
         )}
       </div>
+      {notifOpen&&<NotificationsPanel notifications={NOTIFICATIONS} readIds={readIds} onRead={markRead} onReadAll={markAllRead} onClose={()=>setNotifOpen(false)}/>}
     </div>
   );
 }
