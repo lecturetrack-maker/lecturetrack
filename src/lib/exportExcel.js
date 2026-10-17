@@ -1,5 +1,5 @@
 import XLSX from "xlsx-js-style";
-import { roundToMinute, deriveExtraHours } from "./helpers";
+import { fmtHM, batchTotals } from "./helpers";
 import { collectAllLogs, batchInfoMap, parseYMD, MONTHS_LONG } from "./analytics";
 
 const NAVY = "312E81", INDIGO = "4338CA", SOFT = "EEF2FF", LINE = "E2E8F0", GREY = "64748B";
@@ -21,7 +21,8 @@ const S = {
 
 const txt = (v, s = S.cell) => ({ v: v == null ? "" : String(v), t: "s", s });
 const num = (v, s = S.cellC, z = "0") => ({ v, t: "n", s, z });
-const dur = (h, s = S.cellC) => ({ v: roundToMinute(h) / 24, t: "n", s, z: "[h]:mm" });
+// Text "H:MM" (not an Excel time value) so totals above 24h never wrap back to 0 in any viewer.
+const dur = (h, s = S.cellC) => ({ v: fmtHM(h), t: "s", s });
 const pct = (v, s = S.cellC) => ({ v, t: "n", s, z: "0%" });
 const serial = ds => { const d = parseYMD(ds); return (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(1899, 11, 30)) / 86400000; };
 const dateCell = ds => ({ v: serial(ds), t: "n", s: S.cellC, z: "dd-mmm-yyyy" });
@@ -79,24 +80,20 @@ export function buildReportWorkbook(profile, chapters, now = new Date()) {
   const generated = now.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
   const teacherLine = `${profile?.name || "Teacher"}${profile?.subject ? " • " + profile.subject : ""}${profile?.code ? " • " + profile.code : ""}`;
 
-  const allotted = chapters.reduce((s, c) => s + (c.totalHours || 0), 0);
-  const taken = chapters.reduce((s, c) => s + (c.completedHours || 0), 0);
-  const extra = chapters.reduce((s, c) => s + deriveExtraHours(c.completedHours, c.totalHours), 0);
-  const remaining = Math.max(0, allotted - taken);
+  const T = batchTotals(chapters.filter(c => c.batchCode));
+  const { allotted, taken, extra, remaining } = T;
 
   // ── Sheet 1: Summary ──
   const sb = banner("LectureTrack — Teaching Hours Report", `${teacherLine}  •  Generated ${generated}`, 9);
   const sRows = [...sb.rows];
   sRows.push(["Allotted", "Taken", "Extra", "Remaining", "Progress"].map(l => txt(l, S.statL)).concat(Array(4).fill(null).map(() => ({ v: "", t: "s" }))));
-  sRows.push([dur(allotted, S.statV), dur(taken, S.statV), dur(extra, S.statV), dur(remaining, S.statV), pct(allotted > 0 ? taken / allotted : 0, S.statV)]);
+  sRows.push([dur(allotted, S.statV), dur(taken, S.statV), dur(extra, S.statV), dur(remaining, S.statV), pct(T.allotted > 0 ? T.within / T.allotted : 0, S.statV)]);
   sRows.push([]);
   sRows.push([txt("Batch Summary", S.section)]);
   sRows.push(["Year", "Centre", "Batch", "Category", "Allotted", "Taken", "Extra", "Remaining", "Progress"].map(h => txt(h, S.head)));
   Object.values(info).sort((a, b) => b.year - a.year || a.batchCode.localeCompare(b.batchCode)).forEach(b => {
-    const al = b.chapters.reduce((s, c) => s + (c.totalHours || 0), 0);
-    const tk = b.chapters.reduce((s, c) => s + (c.completedHours || 0), 0);
-    const ex = b.chapters.reduce((s, c) => s + deriveExtraHours(c.completedHours, c.totalHours), 0);
-    sRows.push([num(b.year), txt(b.centre || "—"), txt(b.batchCode), txt(b.category || "—"), dur(al), dur(tk), dur(ex), dur(Math.max(0, al - tk)), pct(al > 0 ? tk / al : 0)]);
+    const bt = batchTotals(b.chapters);
+    sRows.push([num(b.year), txt(b.centre || "—"), txt(b.batchCode), txt(b.category || "—"), dur(bt.allotted), dur(bt.taken), dur(bt.extra), dur(bt.remaining), pct(bt.allotted > 0 ? bt.within / bt.allotted : 0)]);
   });
   const ws1 = makeSheet(sRows, [10, 22, 14, 18, 12, 12, 12, 12, 12], { "!merges": sb.merges, "!rows": sb.heights });
 
@@ -125,7 +122,7 @@ export function buildReportWorkbook(profile, chapters, now = new Date()) {
   const cRows = [...cb.rows, ["Year", "Centre", "Batch", "Chapter", "Allotted", "Taken", "Extra", "Remaining", "Progress"].map(h => txt(h, S.head))];
   chapters.filter(c => c.batchCode).slice().sort((a, b) => (info[b.batchCode]?.year || 0) - (info[a.batchCode]?.year || 0) || a.batchCode.localeCompare(b.batchCode) || a.name.localeCompare(b.name)).forEach(c => {
     const bi = info[c.batchCode] || {};
-    cRows.push([num(bi.year || ""), txt(bi.centre || "—"), txt(c.batchCode), txt(c.name), dur(c.totalHours), dur(c.completedHours), dur(deriveExtraHours(c.completedHours, c.totalHours)), dur(Math.max(0, c.totalHours - c.completedHours)), pct(c.totalHours > 0 ? c.completedHours / c.totalHours : 0)]);
+    cRows.push([num(bi.year || ""), txt(bi.centre || "—"), txt(c.batchCode), txt(c.name), dur(c.totalHours), dur(c.completedHours), dur(batchTotals([c]).extra), dur(Math.max(0, c.totalHours - c.completedHours)), pct(c.totalHours > 0 ? Math.min(1, c.completedHours / c.totalHours) : 0)]);
   });
   const ws5 = makeSheet(cRows, [10, 22, 14, 30, 12, 12, 12, 12, 12], { "!merges": cb.merges, "!rows": cb.heights });
 
