@@ -132,10 +132,20 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
             <div style={{fontSize:17,fontWeight:900}}>{fmtHours(periodTaken)}</div>
             <div style={{fontSize:10,opacity:.75,fontWeight:600,marginTop:2}}>Hours Taken</div>
           </div>
-          {/* Daily motivation: quote + emoji change every day, tile has its own colour */}
-          <div style={{background:motivation.background,borderRadius:16,padding:"12px 14px",display:"flex",flexDirection:"column",justifyContent:"center",boxShadow:"0 4px 14px rgba(0,0,0,.18)"}}>
-            <div style={{fontSize:20,lineHeight:1,marginBottom:6}}>{motivation.emoji}</div>
-            <div style={{fontSize:11.5,fontWeight:800,lineHeight:1.35}}>{motivation.quote}</div>
+          {/* Daily motivation: quote + emoji change every day, tile has its own colour, with a soft shine + twinkle animation */}
+          <style>{`
+            @keyframes ltShine{0%{transform:translateX(-130%) skewX(-20deg)}55%,100%{transform:translateX(330%) skewX(-20deg)}}
+            @keyframes ltTwinkle{0%,100%{opacity:.15;transform:scale(.6) rotate(0deg)}50%{opacity:1;transform:scale(1.15) rotate(25deg)}}
+            @keyframes ltPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
+            @media (prefers-reduced-motion: reduce){.lt-anim{animation:none!important}}
+          `}</style>
+          <div style={{position:"relative",overflow:"hidden",background:motivation.background,borderRadius:16,padding:"12px 14px",display:"flex",flexDirection:"column",justifyContent:"center",boxShadow:"0 4px 14px rgba(0,0,0,.18)"}}>
+            <div className="lt-anim" style={{position:"absolute",top:0,bottom:0,left:0,width:"40%",background:"linear-gradient(90deg,transparent,rgba(255,255,255,.38),transparent)",animation:"ltShine 3.8s ease-in-out infinite",pointerEvents:"none"}}/>
+            {[{top:6,right:10,size:11,delay:"0s"},{top:"48%",right:"14%",size:8,delay:"1.1s"},{bottom:8,left:"46%",size:9,delay:"2s"}].map((sp,i)=>(
+              <span key={i} className="lt-anim" style={{position:"absolute",top:sp.top,bottom:sp.bottom,left:sp.left,right:sp.right,fontSize:sp.size,color:"#fff",animation:`ltTwinkle 2.4s ease-in-out ${sp.delay} infinite`,pointerEvents:"none"}}>✦</span>
+            ))}
+            <div className="lt-anim" style={{fontSize:20,lineHeight:1,marginBottom:6,display:"inline-block",transformOrigin:"left center",animation:"ltPulse 2.6s ease-in-out infinite",position:"relative"}}>{motivation.emoji}</div>
+            <div style={{fontSize:11.5,fontWeight:800,lineHeight:1.35,position:"relative"}}>{motivation.quote}</div>
           </div>
           <div style={{background:"rgba(255,255,255,.15)",borderRadius:16,padding:"12px 14px"}}>
             <div style={{marginBottom:4}}><Star size={17} color="#fff" strokeWidth={2.2}/></div>
