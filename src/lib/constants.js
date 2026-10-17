@@ -46,6 +46,6 @@ export const TRAVEL_PURPOSES = ["Foundation Class","Repeaters","Regular Class","
 
 // Bump this string whenever a new "What's New" announcement should show again to
 // everyone (even people who dismissed a previous one) — it's part of the localStorage key.
-export const WHATS_NEW_ID = "travel-details-v1";
+export const WHATS_NEW_ID = "centre-edit-reports-v2";
 
 export const MASTER = "__MASTER__";
