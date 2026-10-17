@@ -217,7 +217,8 @@ export function toRow(teacherCode,c) {
     total_hours:c.totalHours||0, completed_hours:c.completedHours||0,
     extra_hours:c.extraHours||0, topics:c.topics||[],
     notes:c.notes||"", last_completed_topic:c.lastCompletedTopic||null,
-    hour_logs:c.hourLogs||[], batch_teacher:c.batchTeacher||null, batch_category:c.batchCategory||null, updated_at:new Date().toISOString()
+    hour_logs:c.hourLogs||[], batch_teacher:c.batchTeacher||null, batch_category:c.batchCategory||null,
+    ...(c.batchCentre?{batch_centre:c.batchCentre}:{}), updated_at:new Date().toISOString()
   };
 }
 
@@ -228,7 +229,8 @@ export function fromRow(r) {
     totalHours:r.total_hours||0, completedHours:r.completed_hours||0,
     extraHours:r.extra_hours||0, topics:r.topics||[],
     notes:r.notes||"", lastCompletedTopic:r.last_completed_topic,
-    hourLogs:r.hour_logs||[], batchTeacher:r.batch_teacher||null, batchCategory:r.batch_category||null
+    hourLogs:r.hour_logs||[], batchTeacher:r.batch_teacher||null, batchCategory:r.batch_category||null,
+    batchCentre:r.batch_centre||null, createdAt:r.created_at||null
   };
 }
 
