@@ -1,8 +1,10 @@
 import { useRef } from "react";
-import { User as UserIcon, Camera, BarChart3, Clock, ClipboardList, Star, FolderOpen, BookOpen, Zap, Download, Plane, LogOut } from "lucide-react";
+import { User as UserIcon, Camera, BarChart3, Clock, ClipboardList, Star, FolderOpen, BookOpen, Zap, Download, Plane, LogOut, FileSpreadsheet } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import SubjectIcon from "../components/SubjectIcon";
 import { fmtHours, deriveExtraHours, buildCSV } from "../lib/helpers";
+import { downloadExcelReport } from "../lib/exportExcel";
+import HoursAnalytics from "../components/HoursAnalytics";
 
 export default function ProfileTab({profile,chapters,onLogout,onUpdateProfile,onOpenTravel}) {
   const fileRef=useRef();
@@ -34,6 +36,11 @@ export default function ProfileTab({profile,chapters,onLogout,onUpdateProfile,on
     a.click();
   };
 
+  const downloadExcel=()=>{
+    try{ downloadExcelReport(profile,batchChapters); }
+    catch(e){ console.error(e); alert("Could not create the Excel report. Please try again."); }
+  };
+
   return(
     <div style={{padding:"20px 16px 20px"}}>
       <div style={{background:"linear-gradient(135deg,#4f46e5,#7c3aed)",borderRadius:24,padding:"28px 24px",color:"#fff",marginBottom:20,textAlign:"center",position:"relative",overflow:"hidden"}}>
@@ -60,12 +67,17 @@ export default function ProfileTab({profile,chapters,onLogout,onUpdateProfile,on
           ))}
         </div>
       </div>
+      <HoursAnalytics chapters={batchChapters}/>
       <div style={{background:"#fff",borderRadius:20,padding:20,marginBottom:16,boxShadow:"0 2px 12px rgba(0,0,0,.07)"}}>
         <div style={{fontSize:15,fontWeight:800,color:"#0f172a",marginBottom:14,display:"flex",alignItems:"center",gap:7}}><Zap size={16}/> Quick Actions</div>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          <button onClick={downloadCSV} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px",background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:14,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14,boxShadow:"0 4px 14px rgba(99,102,241,.3)"}}>
-            <Download size={22}/>
-            <div style={{textAlign:"left"}}><div>Download CSV Report</div><div style={{fontSize:11,opacity:.75,fontWeight:500}}>Full chapter report for all batches</div></div>
+          <button onClick={downloadExcel} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px",background:"linear-gradient(135deg,#6366f1,#4338ca)",color:"#fff",border:"none",borderRadius:14,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14,boxShadow:"0 4px 14px rgba(99,102,241,.3)"}}>
+            <FileSpreadsheet size={22}/>
+            <div style={{textAlign:"left"}}><div>Download Excel Report</div><div style={{fontSize:11,opacity:.75,fontWeight:500}}>Date-wise, monthly &amp; yearly hours by batch and centre</div></div>
+          </button>
+          <button onClick={downloadCSV} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px",background:"#fff",color:"#0f172a",border:"2px solid #e2e8f0",borderRadius:14,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14}}>
+            <Download size={22} color="#6366f1"/>
+            <div style={{textAlign:"left"}}><div>Download CSV (basic)</div><div style={{fontSize:11,color:"#94a3b8",fontWeight:500}}>Simple chapter summary</div></div>
           </button>
           <button onClick={onOpenTravel} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px",background:"#fff",color:"#0f172a",border:"2px solid #e2e8f0",borderRadius:14,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14}}>
             <Plane size={22} color="#6366f1"/>
