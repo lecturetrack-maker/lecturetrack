@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Bell, User as UserIcon, FolderOpen, Plus, Clock, Star, BarChart3, ChevronUp, ChevronRight, Inbox, PartyPopper, CheckCircle2, AlertTriangle, MapPin } from "lucide-react";
 import SubjectIcon from "../components/SubjectIcon";
 import SyncBadge from "../components/SyncBadge";
@@ -6,9 +6,10 @@ import PBar from "../components/PBar";
 import { BATCH_COLORS } from "../lib/constants";
 import { fmtHours, todayStr, collectBatchLogs, monthKey, monthLabel, monthlyTotals, dailyTotals, batchTotals } from "../lib/helpers";
 import { batchInfoMap } from "../lib/analytics";
-import { getDailyMotivation } from "../lib/dailyMotivation";
+import { getDailyMotivation, loadMalayalamFont, MALAYALAM_FONT } from "../lib/dailyMotivation";
 import { NOTIFICATIONS, loadReadIds, saveReadIds } from "../lib/notifications";
 import NotificationsPanel from "../components/NotificationsPanel";
+import DayPlanner from "../components/DayPlanner";
 
 // 3 color themes for the "This Month" hero card — App.jsx picks one at random
 // each time the app is freshly opened (not on every tab switch) and passes it
@@ -21,11 +22,12 @@ const BANNER_THEMES=[
 
 // Batches are grouped by category into collapsible sections; accepts completedBatches
 // so the batch list on the front page only shows running batches.
-export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProfile,completedBatches=[],onAddBatch,bannerTheme=0}) {
+export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,syncStatus,onGoProfile,completedBatches=[],onAddBatch,bannerTheme=0,planner}) {
   const batchChapters=chapters.filter(c=>c.batchCode);
   // Overall progress counts only hours that fall inside the allotment (extra hours never inflate it)
   const pctAllTime=batchTotals(batchChapters).pct;
   const motivation=getDailyMotivation(bannerTheme);
+  useEffect(()=>{ if(motivation.lang==="ml") loadMalayalamFont(); },[motivation.lang]);
 
   // Bell notifications: unread count shown as a small red badge
   const [notifOpen,setNotifOpen]=useState(false);
@@ -155,7 +157,7 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
               <span key={i} className="lt-anim" style={{position:"absolute",top:sp.top,bottom:sp.bottom,left:sp.left,right:sp.right,fontSize:sp.size,color:"#fff",animation:`ltTwinkle 2.4s ease-in-out ${sp.delay} infinite`,pointerEvents:"none"}}>✦</span>
             ))}
             <div className="lt-anim" style={{fontSize:20,lineHeight:1,marginBottom:6,display:"inline-block",transformOrigin:"left center",animation:"ltPulse 2.6s ease-in-out infinite",position:"relative"}}>{motivation.emoji}</div>
-            <div style={{fontSize:11.5,fontWeight:800,lineHeight:1.35,position:"relative"}}>{motivation.quote}</div>
+            <div style={{fontSize:motivation.lang==="ml"?(motivation.quote.length>44?10.5:motivation.quote.length>34?11:12):11.5,fontWeight:800,lineHeight:motivation.lang==="ml"?1.5:1.35,position:"relative",...(motivation.lang==="ml"?{fontFamily:MALAYALAM_FONT}:{})}}>{motivation.quote}</div>
           </div>
           <div style={{background:"rgba(255,255,255,.15)",borderRadius:16,padding:"12px 14px"}}>
             <div style={{marginBottom:4}}><Star size={17} color="#fff" strokeWidth={2.2}/></div>
@@ -175,6 +177,7 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
         </div>
       </div>
 
+      {planner&&<DayPlanner chapters={batchChapters} completedBatches={completedBatches} {...planner}/>}
       <div style={{padding:"0 16px"}}>
         <div style={{marginBottom:20}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
