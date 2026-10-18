@@ -1,7 +1,24 @@
 // Daily motivation for the Home banner: one short quote + one smiling emoji per day,
 // changing automatically at midnight (local time). Same all day, new tomorrow.
 
-
+const QUOTES = [
+  "Every class you teach plants a seed.",
+  "You inspire more minds than you know.",
+  "Great teachers light the way for others.",
+  "Small steps daily, big results soon.",
+  "Your words can change a student's future.",
+  "Consistency beats intensity. Keep going!",
+  "One more lecture, one more mind lit up.",
+  "Teach with heart, the rest follows.",
+  "Today's effort is tomorrow's pride.",
+  "Showing up is half the victory.",
+  "Your patience changes lives.",
+  "You make hard things feel possible.",
+  "A good lesson today, a proud student tomorrow.",
+  "Your students notice your effort.",
+  "Believe in them, and they will rise.",
+  "You are building futures, one hour at a time.",
+];
 
 // Malayalam quotes (shown on alternate days, in a Malayalam font)
 const QUOTES_ML = [
@@ -24,7 +41,7 @@ const QUOTES_ML = [
   "അറിവ് പങ്കുവെക്കുമ്പോൾ വളരുന്നത് ഒരു തലമുറയാണ്.",
   "ഓരോ ദിവസവും മികച്ച അധ്യാപകനാകാനുള്ള അവസരമാണ്.",
   "നിങ്ങൾ വിതയ്ക്കുന്ന അറിവ് നാളെയുടെ ലോകത്തെ മാറ്റും.",
-  "ആത്മവിശ്വാസത്തോടെ പഠിപ്പിക്കൂ, സന്തോഷത്തോടെ മുന്നേറൂ."
+  "ആത്മവിശ്വാസത്തോടെ പഠിപ്പിക്കൂ, സന്തോഷത്തോടെ മുന്നേറൂ.",
 ];
 
 export const MALAYALAM_FONT = "'Noto Sans Malayalam','Malayalam Sangam MN','Kartika',sans-serif";
@@ -39,7 +56,7 @@ export function loadMalayalamFont() {
   document.head.appendChild(l);
 }
 
-const EMOJIS = ["😊", "😄", "🙂", "😁", "🤗", "😃", "😌","🤓"];
+const EMOJIS = ["😊", "😄", "🙂", "😁", "🤗", "😃", "😌"];
 
 // Tile colours, chosen so the tile always contrasts with the banner theme (0 indigo, 1 teal, 2 rose/orange)
 const TILE_COLORS = [
