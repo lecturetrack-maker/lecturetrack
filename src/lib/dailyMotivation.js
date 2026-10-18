@@ -1,24 +1,7 @@
 // Daily motivation for the Home banner: one short quote + one smiling emoji per day,
 // changing automatically at midnight (local time). Same all day, new tomorrow.
 
-const QUOTES = [
-  "Every class you teach plants a seed.",
-  "You inspire more minds than you know.",
-  "Great teachers light the way for others.",
-  "Small steps daily, big results soon.",
-  "Your words can change a student's future.",
-  "Consistency beats intensity. Keep going!",
-  "One more lecture, one more mind lit up.",
-  "Teach with heart, the rest follows.",
-  "Today's effort is tomorrow's pride.",
-  "Showing up is half the victory.",
-  "Your patience changes lives.",
-  "You make hard things feel possible.",
-  "A good lesson today, a proud student tomorrow.",
-  "Your students notice your effort.",
-  "Believe in them, and they will rise.",
-  "You are building futures, one hour at a time.",
-];
+
 
 // Malayalam quotes (shown on alternate days, in a Malayalam font)
 const QUOTES_ML = [
