@@ -1,4 +1,4 @@
-import { MapPin, Pencil, BarChart3, FileSpreadsheet, Calculator, Smile, RefreshCw } from "lucide-react";
+import { MapPin, Pencil, BarChart3, FileSpreadsheet, Calculator, Smile, RefreshCw, CalendarClock, Check, Copy } from "lucide-react";
 
 // In-app messages shown behind the bell icon on Home.
 // TO ADD A NEW MESSAGE: put a new object at the TOP of this list with a NEW unique `id`.
@@ -9,6 +9,17 @@ import { MapPin, Pencil, BarChart3, FileSpreadsheet, Calculator, Smile, RefreshC
 //   text  – one-line summary
 //   items – optional list of {Icon, title, text} shown when the message is opened
 export const NOTIFICATIONS = [
+  {
+    id: "day-planner-v4",
+    date: "18 Oct 2026",
+    title: "New: Plan your day",
+    text: "Add today's or tomorrow's classes and log hours with one tap.",
+    items: [
+      { Icon: CalendarClock, title: "Add your classes", text: "On Home, open Plan your day. Tap Add class and choose the batch, chapter, start time, hours and room. Use Tomorrow to plan the evening before." },
+      { Icon: Check, title: "Now, Up next and Not logged", text: "The running class is highlighted with a Log button. Tap it and the hours are saved to that chapter. Classes you forgot show in amber so you can log or skip them." },
+      { Icon: Copy, title: "Save typing", text: "Use Copy last day for similar days, and the quick-add chips for your recent classes." },
+    ],
+  },
   {
     id: "completed-sync-v3",
     date: "17 Oct 2026",
