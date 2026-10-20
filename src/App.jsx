@@ -14,6 +14,7 @@ import BatchFormModal from "./components/BatchFormModal";
 import AddChapterMasterModal from "./components/AddChapterMasterModal";
 import ChapterMasterModal from "./components/ChapterMasterModal";
 import WhatsNewModal from "./components/WhatsNewModal";
+import FestivalGreeting from "./components/FestivalGreeting";
 import EditChapterForm from "./components/EditChapterForm";
 
 import Onboarding from "./pages/Onboarding";
@@ -550,6 +551,8 @@ export default function App() {
     {editMaster&&<ChapterMasterModal chapter={editMaster} onSave={saveMasterTopics} onClose={()=>setEditMaster(null)}/>}
     {/* "What's New" popup — announces new features, dismissible per-teacher */}
     {showWhatsNew&&!loading&&<WhatsNewModal onClose={()=>setShowWhatsNew(false)} onDontShowAgain={dismissWhatsNewForever}/>}
+    {/* Festival greeting poster — shows once, closable; auto-expires (see FestivalGreeting.js) */}
+    {!loading&&<FestivalGreeting/>}
     </>
   );
 }
