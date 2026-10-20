@@ -27,7 +27,7 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
   // Overall progress counts only hours that fall inside the allotment (extra hours never inflate it)
   const pctAllTime=batchTotals(batchChapters).pct;
   const motivation=getDailyMotivation(bannerTheme);
-  useEffect(()=>{ if(motivation.lang==="ml") loadMalayalamFont(); },[motivation.lang]);
+  useEffect(()=>{ if(motivation.lang==="ml"||motivation.sub) loadMalayalamFont(); },[motivation.lang,motivation.sub]);
 
   // Bell notifications: unread count shown as a small red badge
   const [notifOpen,setNotifOpen]=useState(false);
@@ -157,7 +157,8 @@ export default function HomeTab({chapters,profile,onOpenChapter,onOpenBatch,sync
               <span key={i} className="lt-anim" style={{position:"absolute",top:sp.top,bottom:sp.bottom,left:sp.left,right:sp.right,fontSize:sp.size,color:"#fff",animation:`ltTwinkle 2.4s ease-in-out ${sp.delay} infinite`,pointerEvents:"none"}}>✦</span>
             ))}
             <div className="lt-anim" style={{fontSize:20,lineHeight:1,marginBottom:6,display:"inline-block",transformOrigin:"left center",animation:"ltPulse 2.6s ease-in-out infinite",position:"relative"}}>{motivation.emoji}</div>
-            <div style={{fontSize:motivation.lang==="ml"?(motivation.quote.length>44?10.5:motivation.quote.length>34?11:12):11.5,fontWeight:800,lineHeight:motivation.lang==="ml"?1.5:1.35,position:"relative",...(motivation.lang==="ml"?{fontFamily:MALAYALAM_FONT}:{})}}>{motivation.quote}</div>
+            <div style={{fontSize:motivation.special?13:motivation.lang==="ml"?(motivation.quote.length>44?10.5:motivation.quote.length>34?11:12):11.5,fontWeight:800,lineHeight:motivation.lang==="ml"?1.5:1.35,position:"relative",...(motivation.lang==="ml"?{fontFamily:MALAYALAM_FONT}:{})}}>{motivation.quote}</div>
+            {motivation.sub&&<div style={{fontSize:11.5,fontWeight:800,lineHeight:1.5,marginTop:3,position:"relative",fontFamily:MALAYALAM_FONT,opacity:.95}}>{motivation.sub}</div>}
           </div>
           <div style={{background:"rgba(255,255,255,.15)",borderRadius:16,padding:"12px 14px"}}>
             <div style={{marginBottom:4}}><Star size={17} color="#fff" strokeWidth={2.2}/></div>
