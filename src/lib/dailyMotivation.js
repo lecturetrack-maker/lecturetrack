@@ -1,6 +1,8 @@
 // Daily motivation for the Home banner: one short quote + one smiling emoji per day,
 // changing automatically at midnight (local time). Same all day, new tomorrow.
 
+import { getSpecialDay } from "./specialDays";
+
 const QUOTES = [
   "Every class you teach plants a seed.",
   "You inspire more minds than you know.",
@@ -70,6 +72,11 @@ function dayNumber(d = new Date()) {
 }
 
 export function getDailyMotivation(bannerTheme = 0, d = new Date()) {
+  // Festival / special-day greeting overrides the daily quote on that exact date
+  const special = getSpecialDay(d);
+  if (special) {
+    return { quote: special.text, sub: special.sub, emoji: special.emoji, background: special.background, lang: "en", special: true };
+  }
   const n = dayNumber(d);
   const palette = TILE_COLORS[bannerTheme] || TILE_COLORS[0];
   // Even days: English quote. Odd days: Malayalam quote.
