@@ -1,4 +1,4 @@
-import { MapPin, Pencil, BarChart3, FileSpreadsheet, Calculator, Smile, RefreshCw, CalendarClock, Check, Copy } from "lucide-react";
+import { MapPin, Pencil, BarChart3, FileSpreadsheet, Calculator, Smile, RefreshCw, CalendarClock, Check, Copy, PartyPopper } from "lucide-react";
 
 // In-app messages shown behind the bell icon on Home.
 // TO ADD A NEW MESSAGE: put a new object at the TOP of this list with a NEW unique `id`.
@@ -9,6 +9,15 @@ import { MapPin, Pencil, BarChart3, FileSpreadsheet, Calculator, Smile, RefreshC
 //   text  – one-line summary
 //   items – optional list of {Icon, title, text} shown when the message is opened
 export const NOTIFICATIONS = [
+  {
+    id: "special-days-v5",
+    date: "19 Oct 2026",
+    title: "Festival & special-day greetings",
+    text: "The Home banner now wishes you on Teachers' Day, Onam, Vishu, Eid, Christmas, Diwali and more.",
+    items: [
+      { Icon: PartyPopper, title: "Greetings on the day", text: "On special days the quote tile shows a greeting in English and Malayalam, with its own colour. On other days you still get the daily quote." },
+    ],
+  },
   {
     id: "day-planner-v4",
     date: "18 Oct 2026",
