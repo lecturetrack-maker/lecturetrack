@@ -1,14 +1,15 @@
 import { useState } from "react";
 
+// To reuse for the next festival: change GREETING_ID, SHOW_UNTIL and the image file.
 const GREETING_ID = "vijayadashami-2026";
-// Stops showing automatically after Oct 21
-const SHOW_UNTIL = new Date("2026-10-22T00:00:00");
+const SHOW_UNTIL = new Date("2026-10-22T00:00:00"); // stops showing after Oct 21
+const IMAGE_SRC = process.env.PUBLIC_URL + "/vijayadashami.png";
 
 export default function FestivalGreeting() {
   const [open, setOpen] = useState(() => {
     try {
       if (new Date() >= SHOW_UNTIL) return false;
-      return localStorage.getItem("greeting_seen") !== GREETING_ID;
+      return localStorage.getItem("lt_greeting_seen") !== GREETING_ID;
     } catch (e) {
       return true;
     }
@@ -16,7 +17,7 @@ export default function FestivalGreeting() {
 
   const close = () => {
     try {
-      localStorage.setItem("greeting_seen", GREETING_ID);
+      localStorage.setItem("lt_greeting_seen", GREETING_ID);
     } catch (e) {}
     setOpen(false);
   };
@@ -28,8 +29,11 @@ export default function FestivalGreeting() {
       onClick={close}
       style={{
         position: "fixed",
-        inset: 0,
-        zIndex: 9999,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 10000,
         background: "rgba(0,0,0,0.65)",
         display: "flex",
         alignItems: "center",
@@ -57,15 +61,18 @@ export default function FestivalGreeting() {
             fontSize: 20,
             fontWeight: 700,
             lineHeight: "36px",
+            padding: 0,
             boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
             cursor: "pointer",
+            zIndex: 1,
           }}
         >
           ✕
         </button>
         <img
-          src={process.env.PUBLIC_URL + "/vijayadashami.png"}
+          src={IMAGE_SRC}
           alt="Vijayadashami greetings"
+          onError={close}
           style={{
             display: "block",
             maxWidth: "92vw",
