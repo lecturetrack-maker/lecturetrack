@@ -269,6 +269,13 @@ export default function App() {
     setTimeout(()=>setSyncStatus(null),2500);
   },[profile,chapters]);
 
+  // Mark ONE chapter inside a batch as Completed / Running (independent of the whole batch).
+  const toggleChapterCompleted=useCallback((chapterId)=>{
+    const target=chapters.find(c=>c.id===chapterId);
+    if(!target) return;
+    updateChapter({...target,chapterCompleted:!target.chapterCompleted});
+  },[chapters,updateChapter]);
+
   // One-time move of this device's old "completed" list (kept only on the device before)
   // into the online data, so batches already marked completed stay completed everywhere.
   const migratedRef=useRef(false);
@@ -502,6 +509,7 @@ export default function App() {
         onDeleteBatch={()=>deleteBatch(batchView)}
         completed={completedBatches.includes(batchView)}
         onToggleCompleted={()=>toggleBatchCompleted(batchView)}
+        onToggleChapterCompleted={toggleChapterCompleted}
         onEditBatch={()=>setEditBatchOpen(true)}/>
       {editBatchOpen&&(
         <BatchFormModal initial={{batchCode:batchView,teacherName:bChs.find(c=>c.batchTeacher)?.batchTeacher||"",batchCentre:bChs.find(c=>c.batchCentre)?.batchCentre||"",batchCategory:bChs.find(c=>c.batchCategory)?.batchCategory||"",chapters:bChs.map(c=>({id:c.id,name:c.name,totalHours:c.totalHours,completedHours:c.completedHours}))}}
