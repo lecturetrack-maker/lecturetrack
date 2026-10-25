@@ -8,7 +8,7 @@ import { shareBatchImage } from "../lib/shareImages";
 
 // Accepts `completed` + `onToggleCompleted` and renders a "Mark Completed" button
 // beside "Delete This Entire Batch" — both buttons are equal size (flex:1 in a row)
-export default function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapter,onEditChapter,onOpenChapter,onDeleteBatch,completed,onToggleCompleted,onEditBatch}) {
+export default function BatchPage({batchCode,color,chapters,masterChapters,onBack,onDeleteChapter,onEditChapter,onOpenChapter,onDeleteBatch,completed,onToggleCompleted,onEditBatch,onToggleChapterCompleted}) {
   const total=chapters.reduce((s,c)=>s+c.totalHours,0);
   const done=chapters.reduce((s,c)=>s+c.completedHours,0);
   const remaining=batchTotals(chapters).remaining;
@@ -79,14 +79,15 @@ export default function BatchPage({batchCode,color,chapters,masterChapters,onBac
           const topics=c.topics||[];
           return(
             <BatchChapterCard key={c.id} chapter={c} cp={cp} color={color} topics={topics}
-              onOpen={()=>onOpenChapter(c.id)} onEdit={()=>onEditChapter(c)} onDelete={()=>onDeleteChapter(c.id)}/>
+              onOpen={()=>onOpenChapter(c.id)} onEdit={()=>onEditChapter(c)} onDelete={()=>onDeleteChapter(c.id)}
+              onToggleChapterCompleted={onToggleChapterCompleted?()=>onToggleChapterCompleted(c.id):undefined}/>
           );
         })}
         <div style={{display:"flex",gap:10,marginTop:8}}>
           <button onClick={onToggleCompleted}
             style={{flex:1,padding:"14px",background:completed?"#f1f5f9":"#fff",color:completed?"#475569":"#10b981",border:`2px solid ${completed?"#e2e8f0":"#bbf7d0"}`,borderRadius:16,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:completed?"none":"0 2px 8px rgba(16,185,129,.1)",display:"flex",alignItems:"center",justifyContent:"center",gap:8,textAlign:"center"}}>
             {completed?<Clock size={17}/>:<CheckCircle2 size={17}/>}
-            {completed?"Mark as Running":"Chapter Completed"}
+            {completed?"Mark Batch as Running":"Batch Completed"}
           </button>
           <button onClick={onDeleteBatch}
             style={{flex:1,padding:"14px",background:"#fff",color:"#ef4444",border:"2px solid #fecaca",borderRadius:16,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(239,68,68,.1)",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
