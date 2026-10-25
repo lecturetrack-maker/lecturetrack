@@ -1,21 +1,27 @@
 import { useState } from "react";
-import { Pencil, Trash2, ChevronUp, ChevronDown, ChevronRight, ClipboardList, CheckCircle2, BookOpen } from "lucide-react";
+import { Pencil, Trash2, ChevronUp, ChevronDown, ChevronRight, ClipboardList, CheckCircle2, BookOpen, Clock } from "lucide-react";
 import PBar from "./PBar";
 import { fmtHours, deriveExtraHours, getStatus, STATUS } from "../lib/helpers";
 
 // "Tap to open" is a colored banner, separated visually from the stats/topics above it.
-export default function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete}) {
+export default function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,onDelete,onToggleChapterCompleted}) {
   const [showAllTopics,setShowAllTopics]=useState(false);
   const SHOW_LIMIT=3;
   const visibleTopics=showAllTopics?topics:topics.slice(0,SHOW_LIMIT);
   const status=getStatus(chapter.completedHours,chapter.totalHours);
+  const isDone=!!chapter.chapterCompleted;
 
   return(
-    <div style={{background:"#fff",borderRadius:18,marginBottom:12,boxShadow:"0 2px 12px rgba(0,0,0,.06)",border:`2px solid ${color}22`,overflow:"visible"}}>
+    <div style={{background:"#fff",borderRadius:18,marginBottom:12,boxShadow:"0 2px 12px rgba(0,0,0,.06)",border:`2px solid ${isDone?"#bbf7d0":color+"22"}`,overflow:"visible"}}>
       {/* Header row */}
       <div style={{padding:"16px 16px 0 16px"}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
-          <div style={{fontSize:15,fontWeight:800,color:"#0f172a",flex:1}}>{chapter.name}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:15,fontWeight:800,color:"#0f172a"}}>{chapter.name}</div>
+            <span style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:4,fontSize:10,fontWeight:800,padding:"3px 9px",borderRadius:99,background:isDone?"#dcfce7":"#fef3c7",color:isDone?"#15803d":"#b45309"}}>
+              {isDone?<CheckCircle2 size={10}/>:<Clock size={10}/>} {isDone?"Completed":"Running"}
+            </span>
+          </div>
           <div style={{display:"flex",gap:6}}>
             <button onClick={onEdit} style={{background:"#eef2ff",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Pencil size={14} color="#6366f1"/></button>
             <button onClick={onDelete} style={{background:"#fee2e2",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Trash2 size={14} color="#ef4444"/></button>
@@ -55,6 +61,16 @@ export default function BatchChapterCard({chapter,cp,color,topics,onOpen,onEdit,
           </div>
         )}
       </div>
+      {/* Per-chapter Running / Completed toggle */}
+      {onToggleChapterCompleted&&(
+        <div style={{padding:"0 14px 10px"}}>
+          <button onClick={onToggleChapterCompleted}
+            style={{width:"100%",padding:"11px",background:isDone?"#f1f5f9":"#fff",color:isDone?"#475569":"#10b981",border:`2px solid ${isDone?"#e2e8f0":"#bbf7d0"}`,borderRadius:12,fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+            {isDone?<Clock size={15}/>:<CheckCircle2 size={15}/>}
+            {isDone?"Mark Chapter as Running":"Mark Chapter Completed"}
+          </button>
+        </div>
+      )}
       {/* Separated, larger "Open Chapter" button — its own rounded card with margin so it stands out */}
       <div style={{padding:"4px 14px 14px"}}>
         <div onClick={onOpen}
